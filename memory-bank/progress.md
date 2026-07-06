@@ -62,6 +62,25 @@
     for Haptic-Primary auto-pickup). Key has optional `_revealOnPickup` (maze-switch hook).
   - Generator: `ProjectS > Create Game Loop Test` = room + player + Static monster + GameState + 2 keys +
     exit. Verified: hold 1 → collect 2 (Static→Watcher→Hunter) → reach green exit = "YOU ESCAPED".
+### 2026-07-07 — Sappa — Asset pipeline + level-design tooling
+- **Blender 5.1.2 installed** (`/Applications/Blender.app`, via `brew install --cask blender`) → Unity can now
+  auto-import `.blend`. Best practice: still prefer FBX/GLB downloads; use `.blend` when it's the only option.
+- **Generator refactor** (`GreyboxRoomGenerator.cs`) for moving greybox → real art levels:
+  - `Create Gameplay Actors` — spawns Player+Monster+GameState+all systems (no walls/keys/exit) to drop into
+    any environment. `Spawn Key`/`Spawn Exit` at the scene-view focus. `Bake NavMesh (Selected)` bakes+persists
+    a navmesh on any environment root (e.g. an imported art level). Per-object navmesh asset naming.
+  - Workflow: drop an art level → Bake NavMesh (Selected) → Create Gameplay Actors → move Player/Monster onto
+    the floor → Spawn Key×2 + Exit → Play.
+- **Trial art imported (gitignored, not final):** `Assets/LoafbrrAssets/` (Loafbrr backrooms kit, CC0, 250
+  modular prefabs + `TstLevel` sample, MeshColliders) and `Assets/PSXBackrooms/` (PSX pack: 16 FBX pieces +
+  textures auto-hooked + `Hallways.blend`). Both in `.gitignore` under "temporary imported art packs" — the
+  final art direction gets its own commit decision (size/LFS). `Assets/_Project/` holds our own final-asset
+  folders (committed).
+- **Next session — LEVEL DESIGN (hands-on, in-editor):** pick an art pack, build a real level from the modular
+  pieces (or trial `TstLevel`/`Hallways.blend`), bake NavMesh, place the gameplay rig + keys/exit, dress for
+  backrooms mood. That unlocks Event C (section-entry reveal) + section reveal. Still need a **monster model**
+  (env packs are environment only). Also pending: HapticManager/AudioDirector (device) to fire the fear cues.
+
 ### 2026-07-06 — Sappa — Phase 1 chunk 3b (front-end flow, editor-verified)
 - GameState is now the game-flow orchestrator: **MainMenu → Playing → Won/Lost → replay**. Menu freezes
   player+monster; [Enter] begins the run (and starts ScareDirector's Event B timer via `OnRunStarted`);
