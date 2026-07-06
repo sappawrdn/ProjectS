@@ -33,6 +33,9 @@ namespace ProjectS
 
         [Header("Control penalty (1 = full control; catch system lowers it)")]
         [SerializeField, Range(0f, 1f)] private float _controlFactor = 1f;
+        // Design (architecture.md) wants this ON — crippled speed is balanced by the breathing-room loop.
+        // Off for now while greyboxing so movement stays snappy to test with.
+        [SerializeField] private bool _applyControlPenalty = false;
 
         [Header("Flashlight")]
         [SerializeField] private Light _flashlight;
@@ -43,10 +46,24 @@ namespace ProjectS
         private float _yaw;
         private float _pitch;
         private float _verticalVelocity;
-        private int _catchCount; // placeholder until the catch system owns this
+        private int _catchCount;
+        private bool _inputEnabled = true;
 
         // How much control the player currently has (drops with catches): 0->1, 1->0.6, 2+->0.45.
         public float ControlFactor => _controlFactor;
+
+        /// <summary>Freeze/unfreeze look+move (QTE overlays). Re-enabling reads fresh input so nothing
+        /// stale carries through — the prototype's post-QTE drift bug.</summary>
+        public void SetInputEnabled(bool enabled) => _inputEnabled = enabled;
+
+        /// <summary>Catch ladder (architecture.md): heavier controls + constricting FOV as catches accrue.</summary>
+        public void ApplyCatch(int catchCount)
+        {
+            _catchCount = catchCount; // FOV ladder always applies (fear cue)
+            _controlFactor = _applyControlPenalty
+                ? (catchCount <= 0 ? 1f : (catchCount == 1 ? 0.6f : 0.45f))
+                : 1f; // penalty off → full speed
+        }
 
         private void Awake()
         {
@@ -91,8 +108,11 @@ namespace ProjectS
 
         private void Update()
         {
-            Look();
-            Move();
+            if (_inputEnabled)
+            {
+                Look();
+                Move();
+            }
             UpdateFov();
         }
 

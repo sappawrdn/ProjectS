@@ -59,6 +59,13 @@ namespace ProjectS.EditorTools
             gsSo.FindProperty("_monster").objectReferenceValue = monster.GetComponent<ProjectS.MonsterAI>();
             gsSo.ApplyModifiedProperties();
 
+            // Proximity QTE, wired to the same monster + player.
+            var qte = gsGo.AddComponent<ProjectS.QTEController>();
+            var qteSo = new SerializedObject(qte);
+            qteSo.FindProperty("_monster").objectReferenceValue = monster.GetComponent<ProjectS.MonsterAI>();
+            qteSo.FindProperty("_player").objectReferenceValue = player.GetComponent<ProjectS.PlayerController>();
+            qteSo.ApplyModifiedProperties();
+
             // 1 held at start + these 2 findable = 3 total.
             CreateKey("Key_1", new Vector3(6f, 0.6f, 6f));
             CreateKey("Key_2", new Vector3(-7f, 0.6f, -2f));
@@ -199,7 +206,13 @@ namespace ProjectS.EditorTools
             var agent = monster.AddComponent<NavMeshAgent>();
             agent.radius = 0.35f;
             agent.height = 2f;
-            agent.baseOffset = 1f; // capsule pivot is centred; lift so its base sits on the navmesh
+            agent.baseOffset = 1f;         // capsule pivot is centred; lift so its base sits on the navmesh
+            agent.stoppingDistance = 1.2f; // stop just outside contact — don't drive into the player
+
+            // The encounter is the QTE, not a body-block: make the capsule a trigger so it never jams the
+            // player's CharacterController (an overlapping solid capsule freezes movement while look still works).
+            var col = monster.GetComponent<Collider>();
+            if (col != null) col.isTrigger = true;
 
             monster.AddComponent<ProjectS.MonsterAI>();
 

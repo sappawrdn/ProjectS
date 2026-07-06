@@ -50,9 +50,46 @@ namespace ProjectS
         private Vector3 _lastKnownPos;
         private float _searchTimer;
         private float _watcherTimer;
+        private float _stunTimer;
+        private bool _frozen;
 
         public MonsterTier Tier => _tier;
         public bool IsAware => _aware;
+
+        /// <summary>Stunned or frozen — the encounter QTE must not (re)trigger while true, so a catch
+        /// recoil/stun gives a real escape window even if the shove couldn't move it far in tight space.</summary>
+        public bool IsBusy => _frozen || _stunTimer > 0f;
+
+        /// <summary>Hold the monster in place (e.g. while a QTE overlay is open). Clear on resolve.</summary>
+        public void SetFrozen(bool frozen)
+        {
+            _frozen = frozen;
+            if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = frozen;
+        }
+
+        /// <summary>Won-QTE stun: stand still for a few seconds (with OnQteWon for the breathing room).</summary>
+        public void Stun(float seconds)
+        {
+            _stunTimer = Mathf.Max(_stunTimer, seconds);
+            if (_agent != null && _agent.isOnNavMesh) _agent.isStopped = true;
+        }
+
+        /// <summary>Catch recoil: shove the monster back from the player, then stun it — a fresh escape.</summary>
+        public void Recoil(float distance, float stunSeconds)
+        {
+            if (_player != null && _agent != null && _agent.isOnNavMesh)
+            {
+                Vector3 away = transform.position - _player.position;
+                away.y = 0f;
+                Vector3 target = transform.position + away.normalized * distance;
+                if (NavMesh.SamplePosition(target, out NavMeshHit hit, distance, NavMesh.AllAreas))
+                    _agent.Warp(hit.position);
+
+                _aware = false;
+                _lastKnownPos = _player.position;
+            }
+            Stun(stunSeconds);
+        }
 
         private void Awake()
         {
@@ -61,6 +98,17 @@ namespace ProjectS
             {
                 var p = GameObject.FindGameObjectWithTag("Player");
                 if (p != null) _player = p.transform;
+            }
+
+            // The encounter is the QTE, not a body-block. Stop the monster capsule from physically jamming
+            // the player's CharacterController (an overlapping solid capsule freezes movement while look
+            // still works). Works regardless of the collider's trigger flag — no scene regen needed.
+            if (_player != null)
+            {
+                var monsterCol = GetComponent<Collider>();
+                var playerCol = _player.GetComponent<Collider>();
+                if (monsterCol != null && playerCol != null)
+                    Physics.IgnoreCollision(monsterCol, playerCol, true);
             }
         }
 
@@ -111,6 +159,16 @@ namespace ProjectS
         {
             if (_debugHotkeys) HandleDebugHotkeys();
             if (_player == null || _agent == null || !_agent.isOnNavMesh) return;
+
+            // Frozen (QTE open) or stunned (post-QTE) → hold still.
+            if (_frozen) { _agent.isStopped = true; return; }
+            if (_stunTimer > 0f)
+            {
+                _stunTimer -= Time.deltaTime;
+                _agent.isStopped = true;
+                return;
+            }
+            if (_tier != MonsterTier.Static) _agent.isStopped = false;
 
             switch (_tier)
             {

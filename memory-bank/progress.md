@@ -62,10 +62,26 @@
     for Haptic-Primary auto-pickup). Key has optional `_revealOnPickup` (maze-switch hook).
   - Generator: `ProjectS > Create Game Loop Test` = room + player + Static monster + GameState + 2 keys +
     exit. Verified: hold 1 → collect 2 (Static→Watcher→Hunter) → reach green exit = "YOU ESCAPED".
-- **Next options:** Phase 1 chunk 3b (menu ↔ run ↔ end-screen flow + replay reset), OR jump to Phase 2
-  (QTE + catch/recoil ladder — needed for the lose-path). Recommend Phase 2 next: the QTE is the encounter
-  payoff and unlocks the lose-path so the loop is fully win/lose. Section reveal (real maze-switch) is a
-  level-design task for later.
+### 2026-07-06 — Sappa — Phase 2 (QTE + catch/recoil ladder, editor-verified)
+- `QTEController.cs` (Gameplay/): proximity trigger (≤1.6m, non-Static, monster not busy) → needle dial;
+  tap [Space] in the green. 3 hits = stun + `OnQteWon` breathing room; 3 fails = `AddCatch` + monster
+  `Recoil` + player catch ladder. Cooldown 1.5s. IMGUI dial is a greybox stand-in. Tuning from architecture.md.
+- MonsterAI: added `Stun`/`Recoil`/`SetFrozen`/`IsBusy`; QTE won't (re)trigger while stunned/frozen so a
+  catch gives a real escape window.
+- PlayerController: `SetInputEnabled` (freeze during QTE), `ApplyCatch` (FOV ladder always; speed penalty
+  behind `_applyControlPenalty`, **default OFF for greybox** — design wants it ON later).
+- **Bugs fixed this session (all verified):** (1) Hunter sat still on tier-switch → seed last-known =
+  player pos. (2) NavMesh baked only in memory → generator now persists a NavMeshData asset. (3) **Monster
+  capsule body-jammed the player's CharacterController** (could look, couldn't walk) → `Physics.IgnoreCollision`
+  in MonsterAI.Awake + trigger collider + agent stoppingDistance 1.2m. Diagnosed via [Move] logs (input read,
+  cc enabled, pos frozen = physical block).
+- **Loop now fully win AND lose:** collect keys → escalate → QTE encounter → win (breathing room) or lose
+  (catch ladder) → 3 catches = CAUGHT, or reach exit = ESCAPED.
+- **Next options:** Phase 1 chunk 3b (menu ↔ run ↔ end-screen + replay reset), or Phase 3 (Insanity →
+  heartbeat/vignette + monster modulation; Rearrange; ScareDirector). Recommend chunk 3b next (thin, closes
+  the front-end flow) then Phase 3. Section reveal (real maze-switch) + real levels are level-design tasks.
+
+### 2026-07-06 — Sappa — Phase 1 chunks 1-2 (player + monster, editor-verified)
 
 ### 2026-07-06 — Sappa — Phase 0 setup (project + plugins)
 - **Repo hygiene:** added Unity + Claude `.gitignore` (ignores local `CLAUDE.md`/`.claude/`; keeps
