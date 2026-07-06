@@ -55,8 +55,14 @@
 - **Art is gitignored trial** (`Assets/PSXBackrooms/`, `Assets/LoafbrrAssets/` — Loafbrr dropped, owner
   disliked it). The dressed scene references it, so the SCENE isn't committed (regenerate via menus); only
   the tooling is. Blender 5.1.2 installed for `.blend` imports.
-- **Playtest-ready for the friends' test.** Next: collect feedback → tune; place remaining props the owner
-  will direct (wall vent, outlet, sign, exit sign, furniture); then the device pass (haptics/audio wiring).
+- **Neon EXIT signs done** (`ProjectS > Place Exit Signs`): 10 hung vertical + flush to ceiling, avoiding
+  ceiling fixtures; emissive from `ExitSignRedTex` (white text glows readable, red glows red), NO point light
+  (neon look without lighting the room). Added URP **Bloom** to InsanitySystem's runtime volume so emissives
+  glow. Tunable consts: `ExitSignScale`, `ExitSignEuler`, `ExitSignCount`, emission intensity.
+- **Playtest-ready.** Next: place the remaining props the owner will direct — **WallVent, Outlet, Sign1**
+  (wall-mounted; use the door-style OrientAgainstWall + a height offset) and **HospitalBed/Chair/Tray**
+  (floor furniture; `Scatter Hospital Props` exists but owner wants curated placement). Then: playtest-feedback
+  tuning, and the device pass (HapticManager/AudioDirector wiring the proven Core Haptics + PHASE).
 
 ### 2026-07-06 — Sappa — Phase 1 chunks 1-2 (player + monster, editor-verified)
 - **Chunk 1 — PlayerController** (`Assets/Scripts/Player/PlayerController.cs`): CharacterController FP move
