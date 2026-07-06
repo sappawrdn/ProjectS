@@ -76,6 +76,15 @@ namespace ProjectS
             _vignette.intensity.overrideState = true;
             _vignette.smoothness.overrideState = true;
             _vignette.smoothness.value = 1f;
+
+            // Bloom so bright emissives (EXIT signs, ceiling lights) glow like the reference.
+            var bloom = _volume.profile.Add<Bloom>(true);
+            bloom.threshold.overrideState = true;
+            bloom.threshold.value = 0.85f;
+            bloom.intensity.overrideState = true;
+            bloom.intensity.value = 1.6f;
+            bloom.scatter.overrideState = true;
+            bloom.scatter.value = 0.75f;
         }
 
         private void Update()

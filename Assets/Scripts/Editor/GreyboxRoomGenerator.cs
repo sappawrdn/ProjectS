@@ -593,6 +593,80 @@ namespace ProjectS.EditorTools
         private static int SmallestAxis(Vector3 v) => v.x <= v.y && v.x <= v.z ? 0 : (v.y <= v.z ? 1 : 2);
         private static Vector3 AxisVec(int i) => i == 0 ? Vector3.right : (i == 1 ? Vector3.up : Vector3.forward);
 
+        // ===================== Exit signs (hanging, glowing red EXIT) =====================
+        private const int ExitSignCount = 10;
+        private const float ExitSignScale = 1.6f;                                 // bigger so EXIT reads clearly
+        private static readonly Vector3 ExitSignEuler = new Vector3(90f, 0f, 0f); // stand it vertical (hang down) vs flat on ceiling
+
+        [MenuItem("ProjectS/Place Exit Signs")]
+        public static void PlaceExitSigns()
+        {
+            var maze = GameObject.Find("Maze");
+            if (maze == null) { Debug.LogWarning("[Exit] No 'Maze' found — run 'Generate Maze Level' first."); return; }
+            var sign = LoadPsxModel("ExitSign");
+            if (sign == null) { Debug.LogWarning("[Exit] ExitSign not found in Assets/PSXBackrooms/Models/."); return; }
+
+            // The EXIT graphic lives in ExitSignRedTex — apply it as an emissive material so it reads + glows.
+            var exitMat = MakeEmissiveMaterial("Assets/PSXBackrooms/Textures/ExitSignRedTex.png", "ExitSignMat", 2.6f);
+
+            // Don't hang a sign under an existing ceiling fixture (light/vent/sprinkler).
+            var occupied = new HashSet<Vector2Int>();
+            foreach (Transform child in maze.transform)
+                if (child.name == "CeilingLight") occupied.Add(WorldToCell(child.position));
+            var dressing = maze.transform.Find("Dressing");
+            if (dressing != null)
+                foreach (Transform d in dressing)
+                    if (d.position.y > MazeWallH - 1f) occupied.Add(WorldToCell(d.position)); // ceiling props
+
+            var old = maze.transform.Find("ExitSigns");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            var root = new GameObject("ExitSigns");
+            Undo.RegisterCreatedObjectUndo(root, "Place Exit Signs");
+            root.transform.SetParent(maze.transform);
+
+            int placed = 0, guard = 0;
+            while (placed < ExitSignCount && guard++ < 300)
+            {
+                var cell = new Vector2Int(Random.Range(0, MazeW), Random.Range(0, MazeH));
+                if (!occupied.Add(cell)) continue; // skip taken/used cells
+
+                var p = CellCenter(cell.x, cell.y);
+                var inst = (GameObject)PrefabUtility.InstantiatePrefab(sign, root.transform);
+                Undo.RegisterCreatedObjectUndo(inst, "Place Exit Signs");
+                inst.transform.rotation = Quaternion.Euler(ExitSignEuler);
+                inst.transform.localScale *= ExitSignScale;
+                inst.transform.position = new Vector3(p.x, MazeWallH, p.z);
+                if (TryWorldBounds(inst, out Bounds b))
+                    inst.transform.position += Vector3.up * (MazeWallH - b.max.y); // top flush to the ceiling
+
+                if (exitMat != null)
+                    foreach (var r in inst.GetComponentsInChildren<Renderer>()) r.sharedMaterial = exitMat;
+
+                // No point light: the emissive texture + bloom give a neon glow WITHOUT lighting the room.
+                placed++;
+            }
+
+            Debug.Log($"[Exit] {placed} exit signs hung (flush to ceiling, avoiding fixtures) + EXIT texture + glow. " +
+                      "If the EXIT face points the wrong way, tweak ExitSignEuler; if no text, ExitSign needs Sign1 attached.");
+        }
+
+        private static Material MakeEmissiveMaterial(string texPath, string matName, float emissionIntensity)
+        {
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (tex == null || shader == null) { Debug.LogWarning($"[Exit] Missing texture/shader for {matName}."); return null; }
+
+            var mat = new Material(shader) { name = matName };
+            mat.SetTexture("_BaseMap", tex);
+            mat.mainTexture = tex;
+            // Emit the TEXTURE itself (not a flat colour) so the white "EXIT" glows white and the red glows red.
+            mat.EnableKeyword("_EMISSION");
+            mat.SetTexture("_EmissionMap", tex);
+            mat.SetColor("_EmissionColor", Color.white * emissionIntensity); // HDR → blooms, keeps the text readable
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            return mat;
+        }
+
         private static Material MakeTexturedMaterial(string texPath, string matName, Vector2 tiling)
         {
             var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
