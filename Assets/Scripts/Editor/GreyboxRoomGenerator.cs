@@ -1,0 +1,140 @@
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEngine;
+
+namespace ProjectS.EditorTools
+{
+    /// <summary>
+    /// Throwaway greybox generator for early mechanic testing.
+    ///   ProjectS > Create Greybox Test Setup  — room + a ready-to-play Player rig at the spawn (one click).
+    ///   ProjectS > Create Greybox Room         — just the room.
+    ///   ProjectS > Create Player               — just the Player rig (CharacterController + camera + flashlight).
+    /// Everything is marked Navigation Static so it can be baked later. Real level design is authored by
+    /// hand in the scene editor (architecture.md); this just unblocks movement/AI iteration.
+    /// </summary>
+    public static class GreyboxRoomGenerator
+    {
+        private const float RoomSize = 20f;   // floor is RoomSize x RoomSize metres
+        private const float WallHeight = 3f;  // ~3m for a backrooms feel (architecture.md)
+        private const float WallThickness = 0.3f;
+
+        [MenuItem("ProjectS/Create Greybox Test Setup")]
+        public static void CreateTestSetup()
+        {
+            var room = CreateRoomInternal();
+            var player = CreatePlayerInternal();
+
+            var spawn = room.transform.Find("PlayerSpawn");
+            if (spawn != null) player.transform.position = spawn.position;
+
+            Selection.activeGameObject = player;
+            Debug.Log("[Greybox] Test setup ready. Press Play — WASD to move, mouse to look.");
+        }
+
+        [MenuItem("ProjectS/Create Greybox Room")]
+        public static void CreateRoom()
+        {
+            Selection.activeGameObject = CreateRoomInternal();
+        }
+
+        [MenuItem("ProjectS/Create Player")]
+        public static void CreatePlayer()
+        {
+            Selection.activeGameObject = CreatePlayerInternal();
+        }
+
+        private static GameObject CreateRoomInternal()
+        {
+            var root = new GameObject("Greybox");
+            Undo.RegisterCreatedObjectUndo(root, "Create Greybox Room");
+
+            float half = RoomSize / 2f;
+
+            CreateFloor(root, RoomSize);
+
+            // Perimeter walls (N/S span X, E/W span Z).
+            CreateWall(root, "Wall_N", new Vector3(0f, WallHeight / 2f, half), new Vector3(RoomSize, WallHeight, WallThickness));
+            CreateWall(root, "Wall_S", new Vector3(0f, WallHeight / 2f, -half), new Vector3(RoomSize, WallHeight, WallThickness));
+            CreateWall(root, "Wall_E", new Vector3(half, WallHeight / 2f, 0f), new Vector3(WallThickness, WallHeight, RoomSize));
+            CreateWall(root, "Wall_W", new Vector3(-half, WallHeight / 2f, 0f), new Vector3(WallThickness, WallHeight, RoomSize));
+
+            // A couple of interior walls so it isn't an empty box (rough corridors to move around).
+            CreateWall(root, "Wall_Int1", new Vector3(-3f, WallHeight / 2f, 2f), new Vector3(WallThickness, WallHeight, 10f));
+            CreateWall(root, "Wall_Int2", new Vector3(4f, WallHeight / 2f, -3f), new Vector3(8f, WallHeight, WallThickness));
+
+            // Spawn marker for the player.
+            var spawn = new GameObject("PlayerSpawn");
+            Undo.RegisterCreatedObjectUndo(spawn, "Create Greybox Room");
+            spawn.transform.SetParent(root.transform);
+            spawn.transform.position = new Vector3(-half + 2f, 0f, -half + 2f);
+
+            return root;
+        }
+
+        private static GameObject CreatePlayerInternal()
+        {
+            // Remove the scene's default camera so our first-person camera is the only one.
+            var defaultCam = GameObject.Find("Main Camera");
+            if (defaultCam != null) Undo.DestroyObjectImmediate(defaultCam);
+
+            var player = new GameObject("Player");
+            Undo.RegisterCreatedObjectUndo(player, "Create Player");
+            player.tag = "Player";
+
+            var cc = player.AddComponent<CharacterController>();
+            cc.radius = 0.3f;                       // architecture.md capsule radius
+            cc.height = 1.8f;
+            cc.center = new Vector3(0f, 0.9f, 0f);
+
+            player.AddComponent<ProjectS.PlayerController>();
+
+            // First-person camera at eye height.
+            var camGo = new GameObject("Camera");
+            camGo.transform.SetParent(player.transform);
+            camGo.transform.localPosition = new Vector3(0f, 1.6f, 0f); // eye height
+            camGo.tag = "MainCamera";
+            camGo.AddComponent<Camera>();
+            camGo.AddComponent<AudioListener>();
+
+            // Flashlight spotlight, forward from the camera.
+            var lightGo = new GameObject("Flashlight");
+            lightGo.transform.SetParent(camGo.transform);
+            lightGo.transform.localPosition = Vector3.zero;
+            lightGo.transform.localRotation = Quaternion.identity;
+            var light = lightGo.AddComponent<Light>();
+            light.type = LightType.Spot;
+            light.range = 20f;
+            light.spotAngle = 60f;
+            light.intensity = 3f;
+            light.color = new Color(1f, 0.96f, 0.9f);
+
+            return player;
+        }
+
+        private static void CreateFloor(GameObject parent, float size)
+        {
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.name = "Floor";
+            floor.transform.SetParent(parent.transform);
+            floor.transform.position = new Vector3(0f, -0.05f, 0f);
+            floor.transform.localScale = new Vector3(size, 0.1f, size);
+            MarkNavigationStatic(floor);
+        }
+
+        private static void CreateWall(GameObject parent, string name, Vector3 pos, Vector3 scale)
+        {
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.name = name;
+            wall.transform.SetParent(parent.transform);
+            wall.transform.position = pos;
+            wall.transform.localScale = scale;
+            MarkNavigationStatic(wall);
+        }
+
+        private static void MarkNavigationStatic(GameObject go)
+        {
+            GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.NavigationStatic | StaticEditorFlags.ContributeGI);
+        }
+    }
+}
+#endif
