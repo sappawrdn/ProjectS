@@ -39,6 +39,25 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-07 — Sappa — Maze generator + PSX art-dressing pipeline (editor)
+- **Procedural maze** (`ProjectS > Generate Maze Level`): 7×7 cells @ 5 m corridors, recursive-backtracker
+  + braided loops, full gameplay rig + keys/exit + baked NavMesh. Re-run = new layout.
+- **Art dressing** (all in `GreyboxRoomGenerator.cs`, all bounds-based heuristics so they adapt to any FBX
+  orientation/scale — no per-model guessing):
+  - `Skin Maze (PSX + Backrooms mood)`: tile walls/floor/ceiling (runtime materials, not assets → fixes the
+    magenta) + dark-red hospital lighting (dim sun, dark ambient, red ceiling point-lights; flashlight leads).
+  - `Dress Maze — Ceiling + Doors`: auto-lay-flat ceiling lights/vents(embed 0.12)/sprinklers; dense doors
+    (DoorType1 solid slabs only — DoorType2 has a see-through window; 2/wall on 85% of walls, auto-oriented
+    tallest→up + thinnest→wall-normal, scaled 1.3×).
+  - `Clad Walls (WallTemplate)`: tiles WallTemplate2 (flat panel; WallTemplate1 is a corner piece, skipped)
+    across each wall face, scaled to fit. `WallPanelFlip` const if a panel faces into the wall.
+  - `Fix PSX Model Scale` (normalizes giant FBX imports), `Scatter Hospital Props` (bounds-normalized).
+- **Art is gitignored trial** (`Assets/PSXBackrooms/`, `Assets/LoafbrrAssets/` — Loafbrr dropped, owner
+  disliked it). The dressed scene references it, so the SCENE isn't committed (regenerate via menus); only
+  the tooling is. Blender 5.1.2 installed for `.blend` imports.
+- **Playtest-ready for the friends' test.** Next: collect feedback → tune; place remaining props the owner
+  will direct (wall vent, outlet, sign, exit sign, furniture); then the device pass (haptics/audio wiring).
+
 ### 2026-07-06 — Sappa — Phase 1 chunks 1-2 (player + monster, editor-verified)
 - **Chunk 1 — PlayerController** (`Assets/Scripts/Player/PlayerController.cs`): CharacterController FP move
   + look on the new Input System (WASD/mouse for editor iteration; touch comes at the device phase), gravity,
