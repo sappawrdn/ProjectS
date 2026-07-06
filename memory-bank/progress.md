@@ -53,9 +53,23 @@
     Play Mode; Accessibility works on-device (iOS lib present).
   - Plugin source cloned at `~/Documents/apple-unityplugins` (outside repo). Min OS: plugins need iOS 15.6+
     — **TODO:** bump project's iOS min from 15.0 → 15.6 before device build (avoids deployment-target warning).
-- **Next — Phase 0 #3/#4 (the real de-risk, ON DEVICE):** build a tiny scene to a real iPhone and prove
-  (a) Core Haptics heartbeat lub-dub with dynamic intensity, (b) PHASE spatial source + moving listener
-  audible on headphones. If either falls short, decide fallbacks (#5) before porting gameplay.
+- **Phase 0 #3 DONE — Core Haptics PROVEN ON DEVICE (2026-07-06):** built `HeartbeatHapticTest.cs`
+  (`Assets/Scripts/DeRisk/`), ran on a real iPhone — heartbeat lub-dub felt clearly, rate + intensity
+  scale with insanity (auto-sweep). **The game's soul works in Unity.** ✅
+  - **Gotcha (important):** the PHASE plug-in's `PHASEBuildStep.OnProcessEntitlements` injects two
+    paid-only entitlements into EVERY iOS build — `com.apple.developer.coremotion.head-pose` and
+    `com.apple.developer.spatial-audio.profile-access`. A free "Personal Team" can't sign them → Xcode
+    fails ("requires a provisioning profile with Head Pose and Spatial Audio Profile features").
+    Fix committed: `Assets/Scripts/Editor/StripPaidEntitlements.cs` — a `[PostProcessBuild]` that strips
+    both after every build (our design pans audio from the listener transform, not physical head-pose).
+    Set `STRIP=false` there if we ever go paid + want AirPods head-tracking.
+  - Device build recipe: Unity `File > Build Profiles > iOS > Build` → open `Builds/Unity-iPhone.xcodeproj`
+    → Signing & Capabilities: auto-signing + Personal Team → Clean Build Folder → Run. Trust the dev
+    profile on-device (Settings > General > VPN & Device Management). Free-account apps expire in 7 days.
+- **Next — Phase 0 #4 (PHASE, ON DEVICE):** PHASE needs an authored node-graph (Sampler → Spatial Mixer),
+  so for de-risk import the plug-in's official **"PHASE Demo" sample** (Package Manager > Apple.PHASE >
+  Samples) and run it on a real iPhone with headphones — confirm audible direction/distance. Authoring our
+  own graph (with the prototype's hum/entity/heartbeat clips) is a Phase 1 task. Then #5 fallbacks if needed.
 
 ### (seed) — Pivot from RealityKit to Unity
 - Prototyped the full game in Swift/RealityKit; validated mechanics + balance; hit RealityKit's AR-first

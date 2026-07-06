@@ -13,8 +13,10 @@ Legend: `[ ]` not started · `[~]` partial · `[x]` done & verified
 - `[x]` **Apple Unity Plugins** (`github.com/apple/unityplugins`): import `Apple.Core`, `Apple.CoreHaptics`,
   `Apple.PHASE` (+ `Apple.Accessibility`). Build native libs; check README + Issues for version/bugs.
   *(2026-07-06: built via build.py for iOS+macOS; vendored .tgz in LocalPackages/, relative paths, 0 errors.)*
-- `[ ]` **Prove Core Haptics on device** — heartbeat lub-dub with dynamic intensity. This is the soul; if it
-  can't do it, stop and reassess before building further.
+- `[x]` **Prove Core Haptics on device** — heartbeat lub-dub with dynamic intensity. This is the soul; if it
+  can't do it, stop and reassess before building further. *(2026-07-06: PROVEN on iPhone via
+  HeartbeatHapticTest.cs — felt clearly, rate+intensity scale with insanity. Note: PHASE build step injects
+  paid-only entitlements; stripped via Editor/StripPaidEntitlements.cs so free-account signing works.)*
 - `[ ]` **Prove PHASE on device** — one spatial source + moving listener, audible direction/distance on
   headphones. The by-ear foundation.
 - `[ ]` Decide fallbacks if a plugin falls short (native Unity spatial audio / simpler haptics).
