@@ -8,9 +8,11 @@
 Legend: `[ ]` not started · `[~]` partial · `[x]` done & verified
 
 ## Phase 0 — Project setup + plugin de-risk (DO THIS FIRST)
-- `[ ]` **Unity project + URP**, iOS build target, landscape lock, iPhone-only.
-- `[ ]` **Apple Unity Plugins** (`github.com/apple/unityplugins`): import `Apple.Core`, `Apple.CoreHaptics`,
+- `[x]` **Unity project + URP**, iOS build target, landscape lock, iPhone-only. *(2026-07-06: Unity
+  6000.4.3f1, iOS module + Xcode 26.3; Target Device iPhone Only, landscape-lock. Verified from file.)*
+- `[x]` **Apple Unity Plugins** (`github.com/apple/unityplugins`): import `Apple.Core`, `Apple.CoreHaptics`,
   `Apple.PHASE` (+ `Apple.Accessibility`). Build native libs; check README + Issues for version/bugs.
+  *(2026-07-06: built via build.py for iOS+macOS; vendored .tgz in LocalPackages/, relative paths, 0 errors.)*
 - `[ ]` **Prove Core Haptics on device** — heartbeat lub-dub with dynamic intensity. This is the soul; if it
   can't do it, stop and reassess before building further.
 - `[ ]` **Prove PHASE on device** — one spatial source + moving listener, audible direction/distance on

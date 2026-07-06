@@ -39,6 +39,24 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-06 — Sappa — Phase 0 setup (project + plugins)
+- **Repo hygiene:** added Unity + Claude `.gitignore` (ignores local `CLAUDE.md`/`.claude/`; keeps
+  `memory-bank/` tracked). Note: commits in this repo intentionally have NO Claude co-author.
+- **Phase 0 #1 DONE (verified from file):** iOS Build Support installed; platform switched to iOS.
+  Player Settings → **Target Device: iPhone Only** (`targetDevice: 0`), **landscape-lock** (Auto Rotation,
+  portrait disabled, both landscapes on). Env confirmed: Unity `6000.4.3f1`, Xcode 26.3, Apple Silicon.
+- **Phase 0 #2 DONE (verified, 0 console errors):** built Apple Unity Plugins via `build.py`
+  (`Core 3.2.0`, `CoreHaptics 1.3.1`, `PHASE 1.2.7`, `Accessibility 1.1.4`) for iOS+macOS. Vendored the
+  4 `.tgz` into `LocalPackages/`, manifest uses **relative** `file:../LocalPackages/*.tgz` (portable for
+  teammates on clone). `Assets/Apple Plug-In Support/` (auto-generated editor libs) is gitignored.
+  - Known harmless warning: "no macOS native library for Apple.Accessibility" → only affects Editor
+    Play Mode; Accessibility works on-device (iOS lib present).
+  - Plugin source cloned at `~/Documents/apple-unityplugins` (outside repo). Min OS: plugins need iOS 15.6+
+    — **TODO:** bump project's iOS min from 15.0 → 15.6 before device build (avoids deployment-target warning).
+- **Next — Phase 0 #3/#4 (the real de-risk, ON DEVICE):** build a tiny scene to a real iPhone and prove
+  (a) Core Haptics heartbeat lub-dub with dynamic intensity, (b) PHASE spatial source + moving listener
+  audible on headphones. If either falls short, decide fallbacks (#5) before porting gameplay.
+
 ### (seed) — Pivot from RealityKit to Unity
 - Prototyped the full game in Swift/RealityKit; validated mechanics + balance; hit RealityKit's AR-first
   limits (hand-rolled engine features, painful .usdz import). Decided to pivot to Unity, keeping Core
