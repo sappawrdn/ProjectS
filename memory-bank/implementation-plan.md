@@ -17,9 +17,13 @@ Legend: `[ ]` not started · `[~]` partial · `[x]` done & verified
   can't do it, stop and reassess before building further. *(2026-07-06: PROVEN on iPhone via
   HeartbeatHapticTest.cs — felt clearly, rate+intensity scale with insanity. Note: PHASE build step injects
   paid-only entitlements; stripped via Editor/StripPaidEntitlements.cs so free-account signing works.)*
-- `[ ]` **Prove PHASE on device** — one spatial source + moving listener, audible direction/distance on
-  headphones. The by-ear foundation.
-- `[ ]` Decide fallbacks if a plugin falls short (native Unity spatial audio / simpler haptics).
+- `[x]` **Prove PHASE on device** — one spatial source + moving listener, audible direction/distance on
+  headphones. The by-ear foundation. *(2026-07-06: PROVEN on iPhone via the official "PHASE Demo" sample —
+  spatial direction/distance clearly audible on headphones.)*
+- `[x]` Decide fallbacks if a plugin falls short (native Unity spatial audio / simpler haptics).
+  *(N/A — both plugins met the design's needs; no fallback required.)*
+
+> **PHASE 0 COMPLETE (2026-07-06).** Both Apple frameworks de-risked on device. Proceed to Phase 1.
 
 ## Phase 1 — Greybox core loop (must be end-to-end winnable & losable)
 - `[ ]` **Greybox level** in the scene editor (a few connected rooms/corridors; NavMesh baked).

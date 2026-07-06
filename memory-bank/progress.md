@@ -66,10 +66,23 @@
   - Device build recipe: Unity `File > Build Profiles > iOS > Build` → open `Builds/Unity-iPhone.xcodeproj`
     → Signing & Capabilities: auto-signing + Personal Team → Clean Build Folder → Run. Trust the dev
     profile on-device (Settings > General > VPN & Device Management). Free-account apps expire in 7 days.
-- **Next — Phase 0 #4 (PHASE, ON DEVICE):** PHASE needs an authored node-graph (Sampler → Spatial Mixer),
-  so for de-risk import the plug-in's official **"PHASE Demo" sample** (Package Manager > Apple.PHASE >
-  Samples) and run it on a real iPhone with headphones — confirm audible direction/distance. Authoring our
-  own graph (with the prototype's hum/entity/heartbeat clips) is a Phase 1 task. Then #5 fallbacks if needed.
+- **Phase 0 #4 DONE — PHASE PROVEN ON DEVICE (2026-07-06):** imported the plug-in's official "PHASE Demo"
+  sample (Package Manager > Apple.PHASE > Samples), built to a real iPhone with headphones — spatial audio
+  direction/distance clearly audible. **The by-ear navigation foundation works in Unity.** ✅
+  - Sample lives at `Assets/Samples/Apple.PHASE/1.2.7/PHASE Demo/` — keep as the reference for how to wire
+    a PHASE node-graph (Sampler → Spatial Mixer + PHASESource/PHASEListener) when we author our own audio.
+  - Confirmed our `StripPaidEntitlements.cs` auto-strips the paid entitlements on every build (worked
+    hands-off on this build).
+- **Phase 0 #5 — N/A:** both plugins met the design's needs, so no fallback (native Unity audio / simpler
+  haptics) is required.
+
+- **✅ PHASE 0 COMPLETE.** Project setup + both Apple frameworks de-risked on device. The "Apple frameworks
+  ARE the mechanic" pillar is confirmed portable to Unity. Ready for Phase 1.
+- **Next — Phase 1 (greybox core loop):** greybox level (NavMesh baked) → PlayerController (CharacterController
+  + touch look + flashlight) → MonsterAI FSM (Static/Watcher/Hunter, NavMeshAgent, awareness) → keys +
+  sections + win/lose. Build it end-to-end winnable & losable in the editor (no device needed for this phase).
+  Housekeeping first: restore SampleScene (or a new greybox scene) to the build list; decide whether to keep
+  the PHASE demo sample in-repo or gitignore `Assets/Samples/`.
 
 ### (seed) — Pivot from RealityKit to Unity
 - Prototyped the full game in Swift/RealityKit; validated mechanics + balance; hit RealityKit's AR-first
