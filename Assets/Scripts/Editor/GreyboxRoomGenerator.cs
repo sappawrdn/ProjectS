@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEngine;
@@ -19,6 +20,14 @@ namespace ProjectS.EditorTools
         private const float RoomSize = 20f;   // floor is RoomSize x RoomSize metres
         private const float WallHeight = 3f;  // ~3m for a backrooms feel (architecture.md)
         private const float WallThickness = 0.3f;
+
+        // Maze generator config.
+        private const int MazeW = 8;              // cells across
+        private const int MazeH = 8;              // cells deep
+        private const float CellSize = 3.5f;      // corridor width (m)
+        private const float MazeWallH = 3f;
+        private const float MazeWallThick = 0.25f;
+        private const float BraidChance = 0.12f;  // chance to remove an interior wall → loops (evasion flow)
 
         [MenuItem("ProjectS/Create Greybox Test Setup")]
         public static void CreateTestSetup()
@@ -55,6 +64,118 @@ namespace ProjectS.EditorTools
             Selection.activeGameObject = player;
             Debug.Log("[Greybox] Game loop ready. You hold 1 key; collect 2 more (monster escalates Static→Watcher→Hunter), reach the GREEN exit to WIN.");
         }
+
+        // ===================== Maze level =====================
+        // Procedural backrooms maze (greybox). Grid of cells, walls carved by a recursive backtracker, then
+        // braided (some interior walls removed) so there are loops to evade through — not a dead-end-only maze.
+        // Places the full gameplay rig + keys at opposite corners + exit at the far corner, then bakes navmesh.
+        // Re-run for a fresh layout. Skin with real art later by swapping walls at the same grid positions.
+        [MenuItem("ProjectS/Generate Maze Level")]
+        public static void GenerateMazeLevel()
+        {
+            var maze = BuildMaze();
+            BakeNavMesh(maze);
+
+            var player = CreateGameplayActors(CellCenter(0, 0), CellCenter(MazeW / 2, MazeH / 2) + Vector3.up * 1f);
+
+            CreateExit(CellCenter(MazeW - 1, MazeH - 1) + Vector3.up * 0.6f);
+            CreateKey("Key_1", CellCenter(MazeW - 1, 0) + Vector3.up * 0.6f);
+            CreateKey("Key_2", CellCenter(0, MazeH - 1) + Vector3.up * 0.6f);
+
+            Selection.activeGameObject = player;
+            Debug.Log("[Maze] Maze generated. Player at one corner, GREEN exit at the far corner, 2 keys in the other corners. Re-run 'Generate Maze Level' for a new layout.");
+        }
+
+        private static GameObject BuildMaze()
+        {
+            var root = new GameObject("Maze");
+            Undo.RegisterCreatedObjectUndo(root, "Generate Maze Level");
+
+            // Wall grids: vWall[x,z] = wall on the X=x boundary of row z; hWall[x,z] = wall on the Z=z boundary
+            // of column x. Start fully walled, then carve.
+            var vWall = new bool[MazeW + 1, MazeH];
+            var hWall = new bool[MazeW, MazeH + 1];
+            for (int x = 0; x <= MazeW; x++) for (int z = 0; z < MazeH; z++) vWall[x, z] = true;
+            for (int x = 0; x < MazeW; x++) for (int z = 0; z <= MazeH; z++) hWall[x, z] = true;
+
+            CarveMaze(vWall, hWall);
+            BraidMaze(vWall, hWall);
+
+            // Floor (one slab under the whole maze).
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.name = "Floor";
+            floor.transform.SetParent(root.transform);
+            floor.transform.position = new Vector3(MazeW * CellSize / 2f, -0.05f, MazeH * CellSize / 2f);
+            floor.transform.localScale = new Vector3(MazeW * CellSize, 0.1f, MazeH * CellSize);
+            MarkNavigationStatic(floor);
+
+            // Standing vertical walls (run along Z).
+            for (int x = 0; x <= MazeW; x++)
+                for (int z = 0; z < MazeH; z++)
+                    if (vWall[x, z])
+                        CreateWall(root, $"V_{x}_{z}",
+                            new Vector3(x * CellSize, MazeWallH / 2f, z * CellSize + CellSize / 2f),
+                            new Vector3(MazeWallThick, MazeWallH, CellSize));
+
+            // Standing horizontal walls (run along X).
+            for (int x = 0; x < MazeW; x++)
+                for (int z = 0; z <= MazeH; z++)
+                    if (hWall[x, z])
+                        CreateWall(root, $"H_{x}_{z}",
+                            new Vector3(x * CellSize + CellSize / 2f, MazeWallH / 2f, z * CellSize),
+                            new Vector3(CellSize, MazeWallH, MazeWallThick));
+
+            // Scatter ceiling lights (light-death targets + basic lighting).
+            for (int x = 1; x < MazeW; x += 3)
+                for (int z = 1; z < MazeH; z += 3)
+                    CreateCeilingLight(root, CellCenter(x, z) + Vector3.up * (MazeWallH - 0.2f));
+
+            return root;
+        }
+
+        // Recursive backtracker (iterative): visit every cell, knocking down a wall to each newly-visited neighbour.
+        private static void CarveMaze(bool[,] vWall, bool[,] hWall)
+        {
+            var visited = new bool[MazeW, MazeH];
+            var stack = new Stack<Vector2Int>();
+            visited[0, 0] = true;
+            stack.Push(new Vector2Int(0, 0));
+
+            while (stack.Count > 0)
+            {
+                var c = stack.Peek();
+                var neighbours = new List<Vector2Int>();
+                if (c.x + 1 < MazeW && !visited[c.x + 1, c.y]) neighbours.Add(new Vector2Int(c.x + 1, c.y));
+                if (c.x - 1 >= 0 && !visited[c.x - 1, c.y]) neighbours.Add(new Vector2Int(c.x - 1, c.y));
+                if (c.y + 1 < MazeH && !visited[c.x, c.y + 1]) neighbours.Add(new Vector2Int(c.x, c.y + 1));
+                if (c.y - 1 >= 0 && !visited[c.x, c.y - 1]) neighbours.Add(new Vector2Int(c.x, c.y - 1));
+
+                if (neighbours.Count == 0) { stack.Pop(); continue; }
+
+                var n = neighbours[Random.Range(0, neighbours.Count)];
+                if (n.x == c.x + 1) vWall[c.x + 1, c.y] = false;      // carve east
+                else if (n.x == c.x - 1) vWall[c.x, c.y] = false;     // carve west
+                else if (n.y == c.y + 1) hWall[c.x, c.y + 1] = false; // carve north
+                else hWall[c.x, c.y] = false;                         // carve south
+                visited[n.x, n.y] = true;
+                stack.Push(n);
+            }
+        }
+
+        // Remove some interior walls so the maze has loops (a chase needs alternate routes, not just dead-ends).
+        private static void BraidMaze(bool[,] vWall, bool[,] hWall)
+        {
+            for (int x = 1; x < MazeW; x++)
+                for (int z = 0; z < MazeH; z++)
+                    if (vWall[x, z] && Random.value < BraidChance) vWall[x, z] = false;
+
+            for (int x = 0; x < MazeW; x++)
+                for (int z = 1; z < MazeH; z++)
+                    if (hWall[x, z] && Random.value < BraidChance) hWall[x, z] = false;
+        }
+
+        private static Vector3 CellCenter(int x, int z) =>
+            new Vector3(x * CellSize + CellSize / 2f, 0f, z * CellSize + CellSize / 2f);
 
         // Just the gameplay actors (Player + Monster + GameState + all systems) — drop into any environment
         // (e.g. an imported art level). No walls, no keys/exit; place those to fit your layout.
