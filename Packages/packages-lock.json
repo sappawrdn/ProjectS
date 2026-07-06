@@ -1,5 +1,35 @@
 {
   "dependencies": {
+    "com.apple.unityplugin.accessibility": {
+      "version": "file:../LocalPackages/com.apple.unityplugin.accessibility-1.1.4.tgz",
+      "depth": 0,
+      "source": "local-tarball",
+      "dependencies": {
+        "com.apple.unityplugin.core": "3.1.8"
+      }
+    },
+    "com.apple.unityplugin.core": {
+      "version": "file:../LocalPackages/com.apple.unityplugin.core-3.2.0.tgz",
+      "depth": 0,
+      "source": "local-tarball",
+      "dependencies": {}
+    },
+    "com.apple.unityplugin.corehaptics": {
+      "version": "file:../LocalPackages/com.apple.unityplugin.corehaptics-1.3.1.tgz",
+      "depth": 0,
+      "source": "local-tarball",
+      "dependencies": {
+        "com.apple.unityplugin.core": "3.1.8"
+      }
+    },
+    "com.apple.unityplugin.phase": {
+      "version": "file:../LocalPackages/com.apple.unityplugin.phase-1.2.7.tgz",
+      "depth": 0,
+      "source": "local-tarball",
+      "dependencies": {
+        "com.apple.unityplugin.core": "3.1.8"
+      }
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.12",
       "depth": 0,
