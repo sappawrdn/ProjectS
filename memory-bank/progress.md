@@ -39,6 +39,26 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-06 — Sappa — Phase 1 chunks 1-2 (player + monster, editor-verified)
+- **Chunk 1 — PlayerController** (`Assets/Scripts/Player/PlayerController.cs`): CharacterController FP move
+  + look on the new Input System (WASD/mouse for editor iteration; touch comes at the device phase), gravity,
+  flashlight, `controlFactor` + FOV-ladder fields (driven later by the catch system). Tuning from
+  architecture.md. Verified walkable in Play Mode. `activeInputHandler` is **New Input System only** (=1) —
+  old `Input.GetAxis` won't work; use `UnityEngine.InputSystem`.
+- **Chunk 2 — MonsterAI FSM** (`Assets/Scripts/Monster/MonsterAI.cs`): key-gated Static/Watcher/Hunter.
+  Hunter chases when aware (sight + line-of-sight, hysteresis 10/20m), creeps to last-known when it loses
+  you; Watcher teleports around the player (min 4m); breathing-room hook `OnQteWon()`. Debug hotkeys
+  1/2/3/Q. Verified in editor. Fix applied: on Hunter activation, seed last-known = player pos so it hunts
+  toward you instead of standing still.
+- **Tooling** (`Assets/Scripts/Editor/GreyboxRoomGenerator.cs`): menu `ProjectS > Create Greybox Test Setup`
+  builds room + Player + Monster + auto-bakes & **persists** a NavMesh asset (`Assets/NavMeshData/`).
+  Also `Create Greybox Room`, `Create Player`, `Bake NavMesh`. Monster is on the Ignore Raycast layer so it
+  never blocks its own line-of-sight checks.
+- **Next — Phase 1 chunk 3 (close the loop):** keys (1 held + 2 found) → pickup drives
+  `MonsterAI.OnKeyCollected` (tier up) + reveals next section → exit trigger = win; lose ladder (3 catches)
+  needs the QTE/catch system (Phase 2), so Phase 1 win-path is playable, lose-path stubbed. Plus a thin
+  GameState + menu↔run↔end-screen flow.
+
 ### 2026-07-06 — Sappa — Phase 0 setup (project + plugins)
 - **Repo hygiene:** added Unity + Claude `.gitignore` (ignores local `CLAUDE.md`/`.claude/`; keeps
   `memory-bank/` tracked). Note: commits in this repo intentionally have NO Claude co-author.
