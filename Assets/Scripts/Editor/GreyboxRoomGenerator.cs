@@ -43,44 +43,77 @@ namespace ProjectS.EditorTools
             var room = CreateRoomInternal();
             BakeNavMesh(room);
 
-            var player = CreatePlayerInternal();
+            var player = CreateGameplayActors(Vector3.zero, new Vector3(0f, 1f, 6f));
             var spawn = room.transform.Find("PlayerSpawn");
             if (spawn != null) player.transform.position = spawn.position;
 
+            // 1 held at start + these 2 findable = 3 total.
+            CreateKey("Key_1", new Vector3(6f, 0.6f, 6f));
+            CreateKey("Key_2", new Vector3(-7f, 0.6f, -2f));
+            CreateExit(new Vector3(7f, 0.6f, -8f));
+
+            Selection.activeGameObject = player;
+            Debug.Log("[Greybox] Game loop ready. You hold 1 key; collect 2 more (monster escalates Static→Watcher→Hunter), reach the GREEN exit to WIN.");
+        }
+
+        // Just the gameplay actors (Player + Monster + GameState + all systems) — drop into any environment
+        // (e.g. an imported art level). No walls, no keys/exit; place those to fit your layout.
+        [MenuItem("ProjectS/Create Gameplay Actors")]
+        public static void CreateGameplayActorsMenu()
+        {
+            CreateGameplayActors(Vector3.zero, new Vector3(0f, 1f, 6f));
+            Debug.Log("[Greybox] Gameplay actors created. 1) Move Player onto your level's floor. " +
+                      "2) ProjectS > Spawn Key (×2) + Spawn Exit, place them. " +
+                      "3) Select the level root → ProjectS > Bake NavMesh (Selected). Then Play.");
+        }
+
+        private static GameObject CreateGameplayActors(Vector3 playerPos, Vector3 monsterPos)
+        {
+            var player = CreatePlayerInternal();
+            player.transform.position = playerPos;
+
             var monster = CreateMonsterInternal();
-            monster.transform.position = new Vector3(0f, 1f, 6f);
+            monster.transform.position = monsterPos;
             SetMonsterStartTierStatic(monster);
 
-            // Thin GameState wired to the monster.
             var gsGo = new GameObject("GameState");
-            Undo.RegisterCreatedObjectUndo(gsGo, "Create Game Loop Test");
+            Undo.RegisterCreatedObjectUndo(gsGo, "Create Gameplay Actors");
             var gameState = gsGo.AddComponent<ProjectS.GameState>();
             var gsSo = new SerializedObject(gameState);
             gsSo.FindProperty("_monster").objectReferenceValue = monster.GetComponent<ProjectS.MonsterAI>();
             gsSo.ApplyModifiedProperties();
 
-            // Proximity QTE, wired to the same monster + player.
             var qte = gsGo.AddComponent<ProjectS.QTEController>();
             var qteSo = new SerializedObject(qte);
             qteSo.FindProperty("_monster").objectReferenceValue = monster.GetComponent<ProjectS.MonsterAI>();
             qteSo.FindProperty("_player").objectReferenceValue = player.GetComponent<ProjectS.PlayerController>();
             qteSo.ApplyModifiedProperties();
 
-            // Fear channel — drives the vignette + monster modulation (auto-finds player/monster on Start).
-            gsGo.AddComponent<ProjectS.InsanitySystem>();
-            // Perception layer — phantom + light death, gated by unobserved + insanity.
-            gsGo.AddComponent<ProjectS.RearrangeSystem>();
-            // Scripted scares — Event B false-catch (timed).
-            gsGo.AddComponent<ProjectS.ScareDirector>();
-
-            // 1 held at start + these 2 findable = 3 total.
-            CreateKey("Key_1", new Vector3(6f, 0.6f, 6f));
-            CreateKey("Key_2", new Vector3(-7f, 0.6f, -2f));
-
-            CreateExit(new Vector3(7f, 0.6f, -8f));
+            gsGo.AddComponent<ProjectS.InsanitySystem>();  // vignette + monster modulation
+            gsGo.AddComponent<ProjectS.RearrangeSystem>(); // phantom + light death
+            gsGo.AddComponent<ProjectS.ScareDirector>();   // Event B false-catch
 
             Selection.activeGameObject = player;
-            Debug.Log("[Greybox] Game loop ready. You hold 1 key; collect 2 more (monster escalates Static→Watcher→Hunter), reach the GREEN exit to WIN.");
+            return player;
+        }
+
+        [MenuItem("ProjectS/Spawn Key")]
+        public static void SpawnKeyMenu()
+        {
+            Selection.activeGameObject = CreateKey("Key", SceneFocusPoint() + Vector3.up * 0.6f);
+        }
+
+        [MenuItem("ProjectS/Spawn Exit")]
+        public static void SpawnExitMenu()
+        {
+            Selection.activeGameObject = CreateExit(SceneFocusPoint() + Vector3.up * 0.6f);
+        }
+
+        // Where the Scene view is looking, so spawned items land in front of you (fallback: origin).
+        private static Vector3 SceneFocusPoint()
+        {
+            var view = SceneView.lastActiveSceneView;
+            return view != null ? view.pivot : Vector3.zero;
         }
 
         [MenuItem("ProjectS/Bake NavMesh")]
@@ -93,6 +126,19 @@ namespace ProjectS.EditorTools
                 return;
             }
             BakeNavMesh(root);
+        }
+
+        // Bake on any environment root (e.g. an imported art level like TstLevel). Select it first.
+        [MenuItem("ProjectS/Bake NavMesh (Selected)")]
+        public static void BakeNavMeshSelected()
+        {
+            var sel = Selection.activeGameObject;
+            if (sel == null)
+            {
+                Debug.LogWarning("[Greybox] Select the environment root in the Hierarchy first, then Bake NavMesh (Selected).");
+                return;
+            }
+            BakeNavMesh(sel);
         }
 
         private static void BakeNavMesh(GameObject room)
@@ -110,7 +156,7 @@ namespace ProjectS.EditorTools
                 if (!AssetDatabase.IsValidFolder(dir))
                     AssetDatabase.CreateFolder("Assets", "NavMeshData");
 
-                const string path = dir + "/Greybox-NavMesh.asset";
+                string path = dir + "/" + room.name + "-NavMesh.asset";
                 if (!AssetDatabase.Contains(surface.navMeshData))
                 {
                     AssetDatabase.DeleteAsset(path); // clear any stale bake at this path
@@ -256,28 +302,30 @@ namespace ProjectS.EditorTools
             so.ApplyModifiedProperties();
         }
 
-        private static void CreateKey(string name, Vector3 pos)
+        private static GameObject CreateKey(string name, Vector3 pos)
         {
             var key = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             key.name = name;
-            Undo.RegisterCreatedObjectUndo(key, "Create Game Loop Test");
+            Undo.RegisterCreatedObjectUndo(key, "Spawn Key");
             key.transform.position = pos;
             key.transform.localScale = Vector3.one * 0.5f;
             Object.DestroyImmediate(key.GetComponent<Collider>()); // proximity pickup — no collider needed
             key.AddComponent<ProjectS.Key>();
             Colorize(key, new Color(1f, 0.85f, 0.1f)); // yellow
+            return key;
         }
 
-        private static void CreateExit(Vector3 pos)
+        private static GameObject CreateExit(Vector3 pos)
         {
             var exit = GameObject.CreatePrimitive(PrimitiveType.Cube);
             exit.name = "Exit";
-            Undo.RegisterCreatedObjectUndo(exit, "Create Game Loop Test");
+            Undo.RegisterCreatedObjectUndo(exit, "Spawn Exit");
             exit.transform.position = pos;
             exit.transform.localScale = new Vector3(1.5f, 2.2f, 0.3f);
             Object.DestroyImmediate(exit.GetComponent<Collider>());
             exit.AddComponent<ProjectS.ExitDoor>();
             Colorize(exit, new Color(0.1f, 0.8f, 0.2f)); // green
+            return exit;
         }
 
         private static void Colorize(GameObject go, Color color)

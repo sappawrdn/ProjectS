@@ -108,3 +108,11 @@ Thumbs.db
 # ==============================================================
 /Assets/Samples/
 /Assets/Samples.meta
+
+# ==============================================================
+# Temporary imported art packs (being trialled; too big to commit — final art gets its own decision).
+# ==============================================================
+/Assets/LoafbrrAssets/
+/Assets/LoafbrrAssets.meta
+/Assets/PSXBackrooms/
+/Assets/PSXBackrooms.meta
