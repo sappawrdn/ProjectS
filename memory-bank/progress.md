@@ -62,6 +62,20 @@
     for Haptic-Primary auto-pickup). Key has optional `_revealOnPickup` (maze-switch hook).
   - Generator: `ProjectS > Create Game Loop Test` = room + player + Static monster + GameState + 2 keys +
     exit. Verified: hold 1 → collect 2 (Static→Watcher→Hunter) → reach green exit = "YOU ESCAPED".
+### 2026-07-06 — Sappa — Phase 3 chunk 3 (ScareDirector, editor-verified) — PHASE 3 COMPLETE
+- `ScareDirector.cs` (Gameplay/): **Event B — False Catch** (timed ~5s, reliable): monster lunges 1.2m in
+  front of you (frozen → QTE suppressed via IsBusy), fear spikes to 0.9, held 0.45s, then it vanishes
+  (teleports far). No catch-counter change. Debug key J. **Event C** (reveal on section entry) is stubbed
+  as `TriggerReveal()` — call it from a must-cross trigger once real levels exist.
+- Added `MonsterAI.TeleportTo`/`FaceInstant`, `InsanitySystem.Spike`. Generator adds ScareDirector.
+- Verified: wait ~5s (or press J) → monster slams into view + vignette flare, then vanishes; catches stay 0.
+- **✅ PHASE 3 COMPLETE** (Insanity + Rearrange + Scares). The greybox now has the full fear layer.
+- **Next options:** Phase 1 chunk 3b (front-end flow: cold-open → menu → options → run → win/lose → replay
+  reset), or Phase 4 (accessibility headline: Haptic-Primary Mode + audio beacons — device-heavy), or start
+  real level design (unlocks Event C + section reveal). Recommend chunk 3b (thin, makes it feel like a game)
+  or a haptic/audio wiring pass (a `HapticManager`/`AudioDirector` wrapping the proven plugins, so heartbeat
+  + jumpscare slam + beacons actually fire on device).
+
 ### 2026-07-06 — Sappa — Phase 3 chunk 2 (RearrangeSystem, editor-verified)
 - `RearrangeSystem.cs` (Gameplay/): perception phantom (dark capsule spawns behind you, vanishes as you turn
   to face it) + ceiling point-light death behind you. Gated by unobserved + insanity ≥ 0.5. Uses the

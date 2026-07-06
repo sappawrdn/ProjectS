@@ -70,6 +70,8 @@ namespace ProjectS.EditorTools
             gsGo.AddComponent<ProjectS.InsanitySystem>();
             // Perception layer — phantom + light death, gated by unobserved + insanity.
             gsGo.AddComponent<ProjectS.RearrangeSystem>();
+            // Scripted scares — Event B false-catch (timed).
+            gsGo.AddComponent<ProjectS.ScareDirector>();
 
             // 1 held at start + these 2 findable = 3 total.
             CreateKey("Key_1", new Vector3(6f, 0.6f, 6f));

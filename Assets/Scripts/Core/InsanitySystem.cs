@@ -34,6 +34,9 @@ namespace ProjectS
         public float Insanity { get; private set; }
         public float HeartbeatBpm => _baseBpm + _bpmPerInsanity * Insanity;
 
+        /// <summary>Scares spike fear instantly (never lowers it).</summary>
+        public void Spike(float value) => Insanity = Mathf.Max(Insanity, Mathf.Clamp01(value));
+
         private Transform _player;
         private MonsterAI _monster;
         private Vector3 _lastPlayerPos;

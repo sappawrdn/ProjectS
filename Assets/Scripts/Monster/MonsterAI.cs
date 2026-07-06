@@ -117,6 +117,19 @@ namespace ProjectS
         /// <summary>InsanitySystem feeds current fear here; it widens sight + quickens the Watcher.</summary>
         public void SetInsanity(float value) => _insanity = Mathf.Clamp01(value);
 
+        /// <summary>Instantly relocate the agent (used by scripted scares).</summary>
+        public void TeleportTo(Vector3 worldPos)
+        {
+            if (_agent != null && _agent.isOnNavMesh) _agent.Warp(worldPos);
+        }
+
+        /// <summary>Snap to face a world point on the horizontal plane (scare lunge).</summary>
+        public void FaceInstant(Vector3 target)
+        {
+            Vector3 dir = target - transform.position; dir.y = 0f;
+            if (dir.sqrMagnitude > 1e-4f) transform.rotation = Quaternion.LookRotation(dir.normalized);
+        }
+
         /// <summary>Key count drives the tier: 0-1 → Static, 2 → Watcher, 3+ → Hunter.</summary>
         public void OnKeyCollected(int keyCount)
         {
