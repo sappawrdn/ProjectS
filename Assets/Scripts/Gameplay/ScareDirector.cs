@@ -42,7 +42,11 @@ namespace ProjectS
             _camera = Camera.main;
             _monster = FindFirstObjectByType<MonsterAI>();
             _insanity = FindFirstObjectByType<InsanitySystem>();
+        }
 
+        /// <summary>GameState calls this when the run actually begins (not during the menu).</summary>
+        public void OnRunStarted()
+        {
             StartCoroutine(EventBTimer());
         }
 
@@ -62,6 +66,7 @@ namespace ProjectS
         public void FireEventB()
         {
             if (_eventBFired || _scareActive) return;
+            if (GameState.Instance != null && GameState.Instance.State != GameState.RunState.Playing) return;
             _eventBFired = true;
             StartCoroutine(FalseCatchRoutine());
         }

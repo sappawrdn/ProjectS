@@ -1,30 +1,33 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
 namespace ProjectS
 {
     /// <summary>
-    /// Thin run-state owner (architecture.md: no god-object). Tracks the run flags, key count and catch
-    /// count, and drives the monster's tier as keys are collected. Win = reach the exit with enough keys;
-    /// lose = 3 catches (catches come from the QTE/catch system in Phase 2, so the lose-path is stubbed
-    /// for now). The OnGUI readout is a temporary greybox dev aid — the shipping game has near-zero HUD.
+    /// Thin run-state owner + game-flow orchestrator (architecture.md: no god-object). Holds the run flags,
+    /// key/catch counts, drives the monster tier on pickup, and runs the front-end flow:
+    /// MainMenu → Playing → Won/Lost → replay (scene reload). During non-Playing states the player + monster
+    /// are frozen. The OnGUI screens are a greybox stand-in for the real front-end (cold-open, menu, options).
     /// </summary>
     public class GameState : MonoBehaviour
     {
         public static GameState Instance { get; private set; }
 
-        public enum RunState { Playing, Won, Lost }
+        public enum RunState { MainMenu, Playing, Won, Lost }
 
         [Header("Rules (architecture.md)")]
         [SerializeField] private int _keysRequired = 3;      // 1 held + 2 found
         [SerializeField] private int _startingHeldKeys = 1;
         [SerializeField] private int _catchesToLose = 3;
 
-        [Header("References")]
+        [Header("References (auto-found if empty)")]
         [SerializeField] private MonsterAI _monster;
+        [SerializeField] private PlayerController _player;
 
         public int KeyCount { get; private set; }
         public int CatchCount { get; private set; }
-        public RunState State { get; private set; } = RunState.Playing;
+        public RunState State { get; private set; } = RunState.MainMenu;
 
         private void Awake()
         {
@@ -36,7 +39,40 @@ namespace ProjectS
         {
             KeyCount = _startingHeldKeys;
             if (_monster == null) _monster = FindFirstObjectByType<MonsterAI>();
-            _monster?.OnKeyCollected(KeyCount); // set the initial tier for the keys already held
+            if (_player == null) _player = FindFirstObjectByType<PlayerController>();
+            EnterMainMenu();
+        }
+
+        private void Update()
+        {
+            var kb = Keyboard.current;
+            if (kb == null) return;
+
+            if (State == RunState.MainMenu && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame))
+                BeginRun();
+            else if ((State == RunState.Won || State == RunState.Lost) && kb.rKey.wasPressedThisFrame)
+                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // clean replay reset
+        }
+
+        private void EnterMainMenu()
+        {
+            State = RunState.MainMenu;
+            Freeze(true);
+        }
+
+        private void BeginRun()
+        {
+            State = RunState.Playing;
+            Freeze(false);
+            _monster?.OnKeyCollected(KeyCount);                 // set the initial tier for keys held
+            FindFirstObjectByType<ScareDirector>()?.OnRunStarted();
+        }
+
+        // Freeze/unfreeze the run actors for non-Playing states.
+        private void Freeze(bool frozen)
+        {
+            _player?.SetInputEnabled(!frozen);
+            _monster?.SetFrozen(frozen);
         }
 
         public void CollectKey()
@@ -47,7 +83,7 @@ namespace ProjectS
             Debug.Log($"[GameState] Key collected: {KeyCount}/{_keysRequired}");
         }
 
-        /// <summary>Non-fatal strike from a lost QTE (Phase 2 wires this). 3 = game over.</summary>
+        /// <summary>Non-fatal strike from a lost QTE. 3 = game over.</summary>
         public void AddCatch()
         {
             if (State != RunState.Playing) return;
@@ -66,32 +102,50 @@ namespace ProjectS
         private void Win()
         {
             State = RunState.Won;
+            Freeze(true);
             Debug.Log("[GameState] YOU ESCAPED.");
         }
 
         private void Lose()
         {
             State = RunState.Lost;
+            Freeze(true);
             Debug.Log("[GameState] CAUGHT.");
         }
 
         private void OnGUI()
         {
-            // Temporary dev readout (greybox only — remove for the near-zero-HUD shipping build).
+            float w = Screen.width, h = Screen.height;
+
+            if (State == RunState.MainMenu)
+            {
+                CenterText("PROJECT S", 64, Color.white, -40f);
+                CenterText("Press [Enter] to begin", 24, new Color(0.8f, 0.8f, 0.8f), 40f);
+                return;
+            }
+
+            // Playing: temporary dev readout (greybox only — near-zero HUD in the ship build).
             var style = new GUIStyle(GUI.skin.label) { fontSize = 18 };
             GUI.Label(new Rect(12, 12, 500, 30),
                 $"Keys {KeyCount}/{_keysRequired}    Catches {CatchCount}/{_catchesToLose}    {State}", style);
 
-            if (State == RunState.Playing) return;
-
-            var big = new GUIStyle(GUI.skin.label)
+            if (State == RunState.Won || State == RunState.Lost)
             {
-                fontSize = 48,
+                CenterText(State == RunState.Won ? "YOU ESCAPED" : "CAUGHT", 56,
+                    State == RunState.Won ? Color.green : Color.red, -40f);
+                CenterText("Press [R] to restart", 24, new Color(0.85f, 0.85f, 0.85f), 40f);
+            }
+        }
+
+        private void CenterText(string text, int size, Color color, float yOffset)
+        {
+            var style = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = size,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = State == RunState.Won ? Color.green : Color.red }
+                normal = { textColor = color }
             };
-            GUI.Label(new Rect(0, 0, Screen.width, Screen.height),
-                State == RunState.Won ? "YOU ESCAPED" : "CAUGHT", big);
+            GUI.Label(new Rect(0, yOffset, Screen.width, Screen.height), text, style);
         }
     }
 }

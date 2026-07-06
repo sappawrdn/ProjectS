@@ -62,6 +62,18 @@
     for Haptic-Primary auto-pickup). Key has optional `_revealOnPickup` (maze-switch hook).
   - Generator: `ProjectS > Create Game Loop Test` = room + player + Static monster + GameState + 2 keys +
     exit. Verified: hold 1 → collect 2 (Static→Watcher→Hunter) → reach green exit = "YOU ESCAPED".
+### 2026-07-06 — Sappa — Phase 1 chunk 3b (front-end flow, editor-verified)
+- GameState is now the game-flow orchestrator: **MainMenu → Playing → Won/Lost → replay**. Menu freezes
+  player+monster; [Enter] begins the run (and starts ScareDirector's Event B timer via `OnRunStarted`);
+  [R] on the end screen reloads the scene for a clean reset. IMGUI screens ("PROJECT S", "YOU ESCAPED"/
+  "CAUGHT") are greybox stand-ins for the real cold-open/menu/options.
+- ScareDirector: Event B timer starts on run begin (not in the menu); FireEventB gated to Playing.
+- Verified: menu → Enter → play loop → win/lose → R → fresh restart.
+- **The greybox is now a complete, replayable game.** Core loop + fear layer + flow all in.
+- **Next options (bigger, fresh-session work):** Phase 4 accessibility (Haptic-Primary Mode + audio beacons
+  — the headline; device-heavy), a HapticManager/AudioDirector pass to make heartbeat/jumpscare/beacons fire
+  on device (wraps the proven plugins), or real level design (unlocks Event C + section reveal + backrooms feel).
+
 ### 2026-07-06 — Sappa — Phase 3 chunk 3 (ScareDirector, editor-verified) — PHASE 3 COMPLETE
 - `ScareDirector.cs` (Gameplay/): **Event B — False Catch** (timed ~5s, reliable): monster lunges 1.2m in
   front of you (frozen → QTE suppressed via IsBusy), fear spikes to 0.9, held 0.45s, then it vanishes
