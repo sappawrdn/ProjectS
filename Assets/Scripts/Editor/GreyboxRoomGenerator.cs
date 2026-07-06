@@ -66,6 +66,9 @@ namespace ProjectS.EditorTools
             qteSo.FindProperty("_player").objectReferenceValue = player.GetComponent<ProjectS.PlayerController>();
             qteSo.ApplyModifiedProperties();
 
+            // Fear channel — drives the vignette + monster modulation (auto-finds player/monster on Start).
+            gsGo.AddComponent<ProjectS.InsanitySystem>();
+
             // 1 held at start + these 2 findable = 3 total.
             CreateKey("Key_1", new Vector3(6f, 0.6f, 6f));
             CreateKey("Key_2", new Vector3(-7f, 0.6f, -2f));

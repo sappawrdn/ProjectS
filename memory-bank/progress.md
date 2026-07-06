@@ -62,6 +62,18 @@
     for Haptic-Primary auto-pickup). Key has optional `_revealOnPickup` (maze-switch hook).
   - Generator: `ProjectS > Create Game Loop Test` = room + player + Static monster + GameState + 2 keys +
     exit. Verified: hold 1 → collect 2 (Static→Watcher→Hunter) → reach green exit = "YOU ESCAPED".
+### 2026-07-06 — Sappa — Phase 3 chunk 1 (InsanitySystem, editor-verified)
+- `InsanitySystem.cs` (Core/): insanity 0..1 rises near a live monster (`closeness*0.22/s` within 6m) + while
+  moving (`0.06/s`), decays idle (`0.07/s`). Drives a runtime URP **Vignette** (isolated Volume so no shared
+  profile is dirtied; breathes at the heartbeat rate, peak opacity 0.30→0.75) and feeds `MonsterAI.SetInsanity`
+  (wider sight, quicker Watcher). Exposes `HeartbeatBpm` (60+90·insanity) for the on-device haptic/audio heartbeat.
+  Enables `renderPostProcessing` on Camera.main at runtime. Dev readout (no meter in the ship build).
+- Generator adds InsanitySystem to the GameState object. Verified: vignette breathes + darkens with fear,
+  insanity rises near the monster / decays when calm.
+- **Next — Phase 3 remaining:** RearrangeSystem (perception phantom that vanishes when looked at + a light
+  dying behind you; gated by unobserved + high insanity) and ScareDirector (Event B false-catch ~5s, Event C
+  reveal on section entry). Then Phase 1 chunk 3b (front-end flow) or Phase 4 (accessibility).
+
 ### 2026-07-06 — Sappa — Phase 2 (QTE + catch/recoil ladder, editor-verified)
 - `QTEController.cs` (Gameplay/): proximity trigger (≤1.6m, non-Static, monster not busy) → needle dial;
   tap [Space] in the green. 3 hits = stun + `OnQteWon` breathing room; 3 fails = `AddCatch` + monster

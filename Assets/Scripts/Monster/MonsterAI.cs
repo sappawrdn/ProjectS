@@ -114,6 +114,9 @@ namespace ProjectS
 
         private void Start() => SetTier(_startTier);
 
+        /// <summary>InsanitySystem feeds current fear here; it widens sight + quickens the Watcher.</summary>
+        public void SetInsanity(float value) => _insanity = Mathf.Clamp01(value);
+
         /// <summary>Key count drives the tier: 0-1 → Static, 2 → Watcher, 3+ → Hunter.</summary>
         public void OnKeyCollected(int keyCount)
         {
