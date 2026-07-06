@@ -76,10 +76,19 @@
   textures auto-hooked + `Hallways.blend`). Both in `.gitignore` under "temporary imported art packs" — the
   final art direction gets its own commit decision (size/LFS). `Assets/_Project/` holds our own final-asset
   folders (committed).
-- **Next session — LEVEL DESIGN (hands-on, in-editor):** pick an art pack, build a real level from the modular
-  pieces (or trial `TstLevel`/`Hallways.blend`), bake NavMesh, place the gameplay rig + keys/exit, dress for
-  backrooms mood. That unlocks Event C (section-entry reveal) + section reveal. Still need a **monster model**
-  (env packs are environment only). Also pending: HapticManager/AudioDirector (device) to fire the fear cues.
+- **Procedural Maze Generator DONE** (`GreyboxRoomGenerator.cs` → `ProjectS > Generate Maze Level`): builds a
+  greybox backrooms maze (8×8 cells @ 3.5m, walls 3m) via recursive backtracker + braiding (loops for evasion),
+  full gameplay rig + keys at opposite corners + exit at far corner + baked NavMesh. Re-run = fresh layout.
+  Verified playable + fun. **This is the level-design approach: design/tune the maze in greybox, skin with art
+  later** by swapping walls at the same grid positions.
+- **Art direction:** dropped Loafbrr (owner disliked the look). Using **PSXBackrooms** (`Assets/PSXBackrooms/`,
+  gitignored trial) — 16 FBX pieces + textures auto-hooked. Skinning is a later step; needs the PSX wall piece
+  width measured so the maze CellSize matches for clean tiling.
+- **Next session — driven by the friends' playtest (planned for ~2026-07-08):** collect their feedback, then
+  TUNE the maze feel (CellSize, MazeW/H, BraidChance, monster speed — all const/[SerializeField]) + general
+  polish. After the maze feels right: (1) SKIN it with PSX pieces, (2) get a **monster model** (env packs are
+  environment only), (3) HapticManager/AudioDirector (device) to fire heartbeat/jumpscare/beacons. Event C
+  reveal unlocks once real sections exist.
 
 ### 2026-07-06 — Sappa — Phase 1 chunk 3b (front-end flow, editor-verified)
 - GameState is now the game-flow orchestrator: **MainMenu → Playing → Won/Lost → replay**. Menu freezes
