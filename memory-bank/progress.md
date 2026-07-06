@@ -54,10 +54,18 @@
   builds room + Player + Monster + auto-bakes & **persists** a NavMesh asset (`Assets/NavMeshData/`).
   Also `Create Greybox Room`, `Create Player`, `Bake NavMesh`. Monster is on the Ignore Raycast layer so it
   never blocks its own line-of-sight checks.
-- **Next — Phase 1 chunk 3 (close the loop):** keys (1 held + 2 found) → pickup drives
-  `MonsterAI.OnKeyCollected` (tier up) + reveals next section → exit trigger = win; lose ladder (3 catches)
-  needs the QTE/catch system (Phase 2), so Phase 1 win-path is playable, lose-path stubbed. Plus a thin
-  GameState + menu↔run↔end-screen flow.
+- **Chunk 3a DONE — core loop end-to-end winnable (editor-verified):**
+  - `GameState.cs` (Core/): thin run-state (keys, catches, RunState), drives monster tier via
+    `OnKeyCollected`, `TryExit()` wins if keys held, `AddCatch()` stub (Phase 2 wires it). Temp OnGUI
+    dev readout (remove for near-zero-HUD ship).
+  - `Key.cs` + `ExitDoor.cs` (Gameplay/): proximity pickup/exit (reliable with CharacterController; base
+    for Haptic-Primary auto-pickup). Key has optional `_revealOnPickup` (maze-switch hook).
+  - Generator: `ProjectS > Create Game Loop Test` = room + player + Static monster + GameState + 2 keys +
+    exit. Verified: hold 1 → collect 2 (Static→Watcher→Hunter) → reach green exit = "YOU ESCAPED".
+- **Next options:** Phase 1 chunk 3b (menu ↔ run ↔ end-screen flow + replay reset), OR jump to Phase 2
+  (QTE + catch/recoil ladder — needed for the lose-path). Recommend Phase 2 next: the QTE is the encounter
+  payoff and unlocks the lose-path so the loop is fully win/lose. Section reveal (real maze-switch) is a
+  level-design task for later.
 
 ### 2026-07-06 — Sappa — Phase 0 setup (project + plugins)
 - **Repo hygiene:** added Unity + Claude `.gitignore` (ignores local `CLAUDE.md`/`.claude/`; keeps

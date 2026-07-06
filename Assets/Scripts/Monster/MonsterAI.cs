@@ -66,11 +66,12 @@ namespace ProjectS
 
         private void Start() => SetTier(_startTier);
 
-        /// <summary>Key pickup drives the tier: 2 keys → Watcher, 3 keys → Hunter.</summary>
+        /// <summary>Key count drives the tier: 0-1 → Static, 2 → Watcher, 3+ → Hunter.</summary>
         public void OnKeyCollected(int keyCount)
         {
             if (keyCount >= 3) SetTier(MonsterTier.Hunter);
             else if (keyCount >= 2) SetTier(MonsterTier.Watcher);
+            else SetTier(MonsterTier.Static);
         }
 
         public void SetTier(MonsterTier tier)

@@ -37,6 +37,38 @@ namespace ProjectS.EditorTools
             Debug.Log("[Greybox] Test setup ready. Press Play — WASD move, mouse look. Monster debug keys: 1=Static 2=Watcher 3=Hunter, Q=won-QTE.");
         }
 
+        [MenuItem("ProjectS/Create Game Loop Test")]
+        public static void CreateGameLoopTest()
+        {
+            var room = CreateRoomInternal();
+            BakeNavMesh(room);
+
+            var player = CreatePlayerInternal();
+            var spawn = room.transform.Find("PlayerSpawn");
+            if (spawn != null) player.transform.position = spawn.position;
+
+            var monster = CreateMonsterInternal();
+            monster.transform.position = new Vector3(0f, 1f, 6f);
+            SetMonsterStartTierStatic(monster);
+
+            // Thin GameState wired to the monster.
+            var gsGo = new GameObject("GameState");
+            Undo.RegisterCreatedObjectUndo(gsGo, "Create Game Loop Test");
+            var gameState = gsGo.AddComponent<ProjectS.GameState>();
+            var gsSo = new SerializedObject(gameState);
+            gsSo.FindProperty("_monster").objectReferenceValue = monster.GetComponent<ProjectS.MonsterAI>();
+            gsSo.ApplyModifiedProperties();
+
+            // 1 held at start + these 2 findable = 3 total.
+            CreateKey("Key_1", new Vector3(6f, 0.6f, 6f));
+            CreateKey("Key_2", new Vector3(-7f, 0.6f, -2f));
+
+            CreateExit(new Vector3(7f, 0.6f, -8f));
+
+            Selection.activeGameObject = player;
+            Debug.Log("[Greybox] Game loop ready. You hold 1 key; collect 2 more (monster escalates Static→Watcher→Hunter), reach the GREEN exit to WIN.");
+        }
+
         [MenuItem("ProjectS/Bake NavMesh")]
         public static void BakeNavMeshMenu()
         {
@@ -171,15 +203,49 @@ namespace ProjectS.EditorTools
 
             monster.AddComponent<ProjectS.MonsterAI>();
 
-            // Greybox red so it reads at a glance.
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader != null)
-            {
-                var mat = new Material(shader) { color = new Color(0.8f, 0.1f, 0.1f) };
-                monster.GetComponent<Renderer>().sharedMaterial = mat;
-            }
-
+            Colorize(monster, new Color(0.8f, 0.1f, 0.1f)); // red
             return monster;
+        }
+
+        private static void SetMonsterStartTierStatic(GameObject monster)
+        {
+            var ai = monster.GetComponent<ProjectS.MonsterAI>();
+            var so = new SerializedObject(ai);
+            var prop = so.FindProperty("_startTier");
+            if (prop != null) prop.enumValueIndex = (int)ProjectS.MonsterTier.Static;
+            so.ApplyModifiedProperties();
+        }
+
+        private static void CreateKey(string name, Vector3 pos)
+        {
+            var key = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            key.name = name;
+            Undo.RegisterCreatedObjectUndo(key, "Create Game Loop Test");
+            key.transform.position = pos;
+            key.transform.localScale = Vector3.one * 0.5f;
+            Object.DestroyImmediate(key.GetComponent<Collider>()); // proximity pickup — no collider needed
+            key.AddComponent<ProjectS.Key>();
+            Colorize(key, new Color(1f, 0.85f, 0.1f)); // yellow
+        }
+
+        private static void CreateExit(Vector3 pos)
+        {
+            var exit = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            exit.name = "Exit";
+            Undo.RegisterCreatedObjectUndo(exit, "Create Game Loop Test");
+            exit.transform.position = pos;
+            exit.transform.localScale = new Vector3(1.5f, 2.2f, 0.3f);
+            Object.DestroyImmediate(exit.GetComponent<Collider>());
+            exit.AddComponent<ProjectS.ExitDoor>();
+            Colorize(exit, new Color(0.1f, 0.8f, 0.2f)); // green
+        }
+
+        private static void Colorize(GameObject go, Color color)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) return;
+            var mat = new Material(shader) { color = color };
+            go.GetComponent<Renderer>().sharedMaterial = mat;
         }
 
         private static void CreateFloor(GameObject parent, float size)
