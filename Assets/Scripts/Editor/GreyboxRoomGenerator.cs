@@ -68,6 +68,8 @@ namespace ProjectS.EditorTools
 
             // Fear channel — drives the vignette + monster modulation (auto-finds player/monster on Start).
             gsGo.AddComponent<ProjectS.InsanitySystem>();
+            // Perception layer — phantom + light death, gated by unobserved + insanity.
+            gsGo.AddComponent<ProjectS.RearrangeSystem>();
 
             // 1 held at start + these 2 findable = 3 total.
             CreateKey("Key_1", new Vector3(6f, 0.6f, 6f));
@@ -150,6 +152,13 @@ namespace ProjectS.EditorTools
             CreateWall(root, "Wall_Int1", new Vector3(-3f, WallHeight / 2f, 2f), new Vector3(WallThickness, WallHeight, 10f));
             CreateWall(root, "Wall_Int2", new Vector3(4f, WallHeight / 2f, -3f), new Vector3(8f, WallHeight, WallThickness));
 
+            // Ceiling point lights (targets for the rearrange "light death").
+            float ceiling = WallHeight - 0.2f;
+            CreateCeilingLight(root, new Vector3(-5f, ceiling, -5f));
+            CreateCeilingLight(root, new Vector3(5f, ceiling, -5f));
+            CreateCeilingLight(root, new Vector3(-5f, ceiling, 5f));
+            CreateCeilingLight(root, new Vector3(5f, ceiling, 5f));
+
             // Spawn marker for the player.
             var spawn = new GameObject("PlayerSpawn");
             Undo.RegisterCreatedObjectUndo(spawn, "Create Greybox Room");
@@ -157,6 +166,19 @@ namespace ProjectS.EditorTools
             spawn.transform.position = new Vector3(-half + 2f, 0f, -half + 2f);
 
             return root;
+        }
+
+        private static void CreateCeilingLight(GameObject parent, Vector3 pos)
+        {
+            var go = new GameObject("CeilingLight");
+            Undo.RegisterCreatedObjectUndo(go, "Create Greybox Room");
+            go.transform.SetParent(parent.transform);
+            go.transform.position = pos;
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.range = 12f;
+            light.intensity = 1.5f;
+            light.color = new Color(1f, 0.95f, 0.85f);
         }
 
         private static GameObject CreatePlayerInternal()

@@ -62,6 +62,18 @@
     for Haptic-Primary auto-pickup). Key has optional `_revealOnPickup` (maze-switch hook).
   - Generator: `ProjectS > Create Game Loop Test` = room + player + Static monster + GameState + 2 keys +
     exit. Verified: hold 1 → collect 2 (Static→Watcher→Hunter) → reach green exit = "YOU ESCAPED".
+### 2026-07-06 — Sappa — Phase 3 chunk 2 (RearrangeSystem, editor-verified)
+- `RearrangeSystem.cs` (Gameplay/): perception phantom (dark capsule spawns behind you, vanishes as you turn
+  to face it) + ceiling point-light death behind you. Gated by unobserved + insanity ≥ 0.5. Uses the
+  `ForwardDot` primitive with **hysteresis**: spawns at dot < 0 (behind), vanishes at dot > 0.93 (nearly
+  facing, inside the ~60° FOV) — the fix for "phantom vanished before I could see it" (unobservedDot 0.3 ≈ 72°
+  is outside the 60° FOV, so a single threshold popped it off-screen). Debug: press P to force a phantom.
+- Generator adds ceiling point lights (light-death targets) + RearrangeSystem to the GameState object.
+- Verified: press P → glimpse a figure at the screen edge as you turn, then it vanishes.
+- **Next — Phase 3 remaining:** ScareDirector (Event B false-catch ~5s; Event C reveal on section entry —
+  needs section geometry, better after real levels). Then Phase 1 chunk 3b (front-end flow) or Phase 4
+  (accessibility: Haptic-Primary Mode, audio beacons).
+
 ### 2026-07-06 — Sappa — Phase 3 chunk 1 (InsanitySystem, editor-verified)
 - `InsanitySystem.cs` (Core/): insanity 0..1 rises near a live monster (`closeness*0.22/s` within 6m) + while
   moving (`0.06/s`), decays idle (`0.07/s`). Drives a runtime URP **Vignette** (isolated Volume so no shared
