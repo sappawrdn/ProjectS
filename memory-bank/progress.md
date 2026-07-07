@@ -39,6 +39,33 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-08 — Sappa — Level3: designer top-down map → deterministic greybox (COMMITTED + PUSHED)
+- **Designer handed a top-down PNG** (`~/Downloads/Level 3.png`, Start bottom-left / Finish top-right). Traced
+  it deterministically (not the random maze): thresholded the grey walls (lum 83) vs black text, split each
+  wall pixel H/V by run-length, connected-components → **55 wall centreline segments**. (Python one-off in
+  `/tmp/ch4`; embedded the result as a `Seg[]` in `GreyboxRoomGenerator.cs`.)
+- **`ProjectS > Build Level3 (designer PNG)`**: builds a NEW scene `Assets/Scenes/Level3.unity` (maze scene
+  untouched) — floor + 55 **thin (0.25 m) walls** (drawing strokes are ~2 m; rendering thin reclaims that as
+  corridor width → ~4 m typical corridors for hospital props) at **52×68 m**, 3 m walls. Full gameplay rig +
+  **3 keys spread OFF the Start→Finish diagonal** + exit + baked NavMesh. Tune `Ch4WorldWidth` (one number) to
+  rescale.
+- **Verified playable** (Python flood-fill on the trace): all 3 keys + exit reachable from Start, no sealed
+  dead zones. Caught + flagged that the raw trace nearly **sealed the Finish corner** (single sub-1.5 m choke);
+  owner opened it manually in-scene → exit confirmed reachable in Play.
+- **Self-contained greybox** (primitives only, no imported art) → clones 1:1. **COMMITTED + PUSHED** to
+  `origin/main` (`e5fc57e`): `Level3.unity` + `Level3-NavMesh.asset` + generator. So the teammate gets an
+  IDENTICAL level with just `git pull` — no PSX art needed (unlike the gitignored maze dressing). Owner edited
+  walls manually after generating, so **`Level3.unity` (the scene) is now the source of truth, not the generator**.
+- **`ProjectS > Skin Level3 (PSX + ceiling)`**: walls (`TileTextureBase`, per-wall tiling via
+  MaterialPropertyBlock so long/short walls keep texel density) + floor (`FloorTile1`) + full-footprint ceiling
+  slab (`Ceiling1`) + ~30 red ceiling point-lights on an 11 m grid + dark-red backrooms mood (dim sun/ambient).
+  Skin references gitignored PSX art → **skinned scene NOT committed** (teammate re-runs Skin after getting art).
+- **Owner: skin "cukup aman"; brightness to tune later.** Abandoned earlier `CH4-Map1` (.blend/.usdz/FBX import
+  detour) left as harmless dead menu (`Build CH4-Map1 Greybox Scene`) — clean up later.
+- **Next:** hospital props + doors + EXIT-signs for Level3 (the maze dressing menus are maze-grid-coupled →
+  need a Level3-adapted version, wall/ceiling placement without a grid), then lighting tune, then device pass
+  (HapticManager/AudioDirector wiring the proven Core Haptics + PHASE).
+
 ### 2026-07-07 — Sappa — Maze generator + PSX art-dressing pipeline (editor)
 - **Procedural maze** (`ProjectS > Generate Maze Level`): 7×7 cells @ 5 m corridors, recursive-backtracker
   + braided loops, full gameplay rig + keys/exit + baked NavMesh. Re-run = new layout.
