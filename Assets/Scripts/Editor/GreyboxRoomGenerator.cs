@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Unity.AI.Navigation;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -85,6 +86,327 @@ namespace ProjectS.EditorTools
             Selection.activeGameObject = player;
             Debug.Log("[Maze] Maze generated. Player at one corner, GREEN exit at the far corner, 2 keys in the other corners. Re-run 'Generate Maze Level' for a new layout.");
         }
+
+        // ===================== Imported greybox level (CH4-Map1) =====================
+        // Builds a NEW scene from the Blender-exported FBX greybox so the maze scene stays untouched.
+        // Instantiates the level, auto-uprights it (thin axis → Y) + seats its floor on y=0, adds MeshColliders
+        // so the player collides, bakes the navmesh, drops the full gameplay rig + 2 keys + exit on valid
+        // navmesh points, and saves the scene. Self-diagnosing: it logs the level bounds (verify scale/orientation)
+        // and the navmesh triangle count (0 tris = ceiling too low for the 2m agent → tell me, I'll drop it).
+        private const string Ch4FbxPath = "Assets/_Project/Levels/CH4-Map1.fbx";
+        private const string Ch4ScenePath = "Assets/Scenes/CH4-Map1.unity";
+
+        [MenuItem("ProjectS/Build CH4-Map1 Greybox Scene")]
+        public static void BuildCh4GreyboxScene()
+        {
+            var levelPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Ch4FbxPath);
+            if (levelPrefab == null)
+            {
+                Debug.LogWarning($"[CH4] {Ch4FbxPath} not imported yet. Click into the Unity window so it imports the FBX, then re-run.");
+                return;
+            }
+
+            // Politely offer to save the current (maze) scene before we swap — never discard it silently.
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
+            // New scene with DefaultGameObjects = a Main Camera (the player rig deletes it) + a Directional Light.
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+
+            var level = (GameObject)PrefabUtility.InstantiatePrefab(levelPrefab);
+            level.name = "CH4-Map1";
+            level.transform.position = Vector3.zero;
+            level.transform.rotation = Quaternion.identity;
+
+            // Auto-upright: the 2 m height should be the thinnest axis, and it should point up (Y). If the FBX
+            // imported tilted, the thin axis lands on X or Z — rotate so it stands up (no Blender round-trip needed).
+            if (TryWorldBounds(level, out Bounds pre))
+            {
+                Vector3 s = pre.size;
+                if (s.x <= s.y && s.x <= s.z) level.transform.rotation = Quaternion.Euler(0f, 0f, 90f);      // X thin → up
+                else if (s.z <= s.y && s.z <= s.x) level.transform.rotation = Quaternion.Euler(90f, 0f, 0f); // Z thin → up
+                // else Y already thinnest → upright
+            }
+            // Seat the floor on y = 0 so player/key/exit height math lines up.
+            if (TryWorldBounds(level, out Bounds seat))
+                level.transform.position += Vector3.up * (0f - seat.min.y);
+
+            if (TryWorldBounds(level, out Bounds lb))
+                Debug.Log($"[CH4] Level bounds size = {lb.size} (expect footprint ~32x31, height ~2 on Y).");
+
+            // MeshCollider on every mesh (player collision) + mark nav static (navmesh bake source).
+            int cols = 0;
+            foreach (var mf in level.GetComponentsInChildren<MeshFilter>())
+            {
+                if (mf.sharedMesh == null) continue;
+                var mc = mf.gameObject.GetComponent<MeshCollider>();
+                if (mc == null) mc = Undo.AddComponent<MeshCollider>(mf.gameObject);
+                mc.sharedMesh = mf.sharedMesh;
+                MarkNavigationStatic(mf.gameObject);
+                cols++;
+            }
+
+            // Short-agent bake so the 2 m ceiling stays walkable (default Humanoid height 2 rejects it).
+            BakeNavMeshShort(level, "CH4-Map1-NavMesh", 1.7f, 0.3f);
+
+            var tri = NavMesh.CalculateTriangulation();
+            int triCount = tri.indices.Length / 3;
+            Debug.Log($"[CH4] NavMesh: {triCount} tris.");
+
+            // Place the rig on REAL navmesh points (spread via farthest-point sampling) — never bounds-centre
+            // guesses, so nothing lands outside the floor. Order: [0]=central (player), [1..3]=spread (keys/exit).
+            GameObject player;
+            if (TryNavMeshSpots(tri, 4, out var spots))
+            {
+                Vector3 mSpawn = SampleNav(spots[0] + new Vector3(6f, 0f, 6f), spots[0]);
+                player = CreateGameplayActors(spots[0], mSpawn);
+                CreateKey("Key_1", spots[1] + Vector3.up * 0.6f);
+                CreateKey("Key_2", spots[2] + Vector3.up * 0.6f);
+                CreateExit(spots[3] + Vector3.up * 0.6f);
+            }
+            else
+            {
+                // Navmesh empty (still no walkable floor) — drop the rig at the centre so it's visible, and shout.
+                Vector3 c = TryWorldBounds(level, out Bounds bc) ? bc.center : Vector3.zero;
+                player = CreateGameplayActors(c, c + new Vector3(4f, 0f, 4f));
+                Debug.LogWarning("[CH4] NavMesh baked EMPTY even with a 1.7 m agent — the level may have no flat floor, " +
+                                 "or the floor didn't import. Paste the bounds log; I'll dig in.");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/Scenes")) AssetDatabase.CreateFolder("Assets", "Scenes");
+            EditorSceneManager.SaveScene(scene, Ch4ScenePath);
+
+            Selection.activeGameObject = player;
+            Debug.Log($"[CH4] Greybox scene built ({cols} mesh colliders, {triCount} navmesh tris) + saved to {Ch4ScenePath}. " +
+                      "Press Play — WASD + mouse.");
+        }
+
+        // Snap a point onto the navmesh (falls back to a given point if the probe misses).
+        private static Vector3 SampleNav(Vector3 near, Vector3 fallback)
+        {
+            if (NavMesh.SamplePosition(near, out NavMeshHit hit, 25f, NavMesh.AllAreas)) return hit.position;
+            return fallback;
+        }
+
+        // Pick `count` well-spread points that are guaranteed to sit on the navmesh: take every triangle
+        // centroid, then greedily farthest-point-sample so the picks are far apart. spots[0] is the most
+        // central (good for the player); later spots fan out to the extremities (keys / exit).
+        private static bool TryNavMeshSpots(NavMeshTriangulation tri, int count, out List<Vector3> spots)
+        {
+            spots = new List<Vector3>();
+            if (tri.indices.Length < 3) return false;
+
+            var centroids = new List<Vector3>();
+            for (int i = 0; i + 2 < tri.indices.Length; i += 3)
+                centroids.Add((tri.vertices[tri.indices[i]] + tri.vertices[tri.indices[i + 1]] + tri.vertices[tri.indices[i + 2]]) / 3f);
+
+            Vector3 avg = Vector3.zero;
+            foreach (var p in centroids) avg += p;
+            avg /= centroids.Count;
+
+            int start = 0; float bestC = float.MaxValue;
+            for (int i = 0; i < centroids.Count; i++)
+            {
+                float d = (centroids[i] - avg).sqrMagnitude;
+                if (d < bestC) { bestC = d; start = i; }
+            }
+            spots.Add(centroids[start]);
+
+            while (spots.Count < count && spots.Count < centroids.Count)
+            {
+                int pick = 0; float bestFar = -1f;
+                for (int i = 0; i < centroids.Count; i++)
+                {
+                    float nearest = float.MaxValue;
+                    foreach (var s in spots) nearest = Mathf.Min(nearest, (centroids[i] - s).sqrMagnitude);
+                    if (nearest > bestFar) { bestFar = nearest; pick = i; }
+                }
+                spots.Add(centroids[pick]);
+            }
+            // If the navmesh had fewer than `count` triangles, pad by reusing the last spot.
+            while (spots.Count < count) spots.Add(spots[spots.Count - 1]);
+            return true;
+        }
+
+        // Bake with a shorter-than-default agent so a low-ceiling level (this map is only ~2 m) stays walkable.
+        // EVERYTHING in world space to avoid local/world offset bugs: sources collected with root=null (world),
+        // the surface sits at the origin (identity) so AddData applies no transform, and we build at zero/identity.
+        // On reload the origin surface re-adds the same world-space data. Persists the data as an asset.
+        private static void BakeNavMeshShort(GameObject level, string dataName, float agentHeight, float agentRadius)
+        {
+            var navRoot = new GameObject("CH4-NavMesh"); // origin + identity: world-space data maps 1:1
+            Undo.RegisterCreatedObjectUndo(navRoot, "Build CH4 NavMesh");
+            var surface = navRoot.AddComponent<NavMeshSurface>();
+
+            var settings = NavMesh.GetSettingsByID(0); // Humanoid base (agentTypeID 0 = what the monster agent uses)
+            settings.agentHeight = agentHeight;
+            settings.agentRadius = agentRadius;
+            settings.agentClimb = 0.4f;
+
+            // root=null → sources in WORLD space (only the level exists in the scene at bake time).
+            var markups = new List<NavMeshBuildMarkup>();
+            var sources = new List<NavMeshBuildSource>();
+            NavMeshBuilder.CollectSources(null, ~0, NavMeshCollectGeometry.RenderMeshes, 0, markups, sources);
+
+            TryWorldBounds(level, out Bounds b);
+            var bounds = new Bounds(b.center, b.size + Vector3.one * 4f); // world bounds, padded so edges aren't clipped
+            var data = NavMeshBuilder.BuildNavMeshData(settings, sources, bounds, Vector3.zero, Quaternion.identity);
+            if (data != null)
+            {
+                data.name = dataName;
+                surface.navMeshData = data; // public setter (NavMeshSurface 2.0.x)
+                surface.AddData();
+
+                const string dir = "Assets/NavMeshData";
+                if (!AssetDatabase.IsValidFolder(dir)) AssetDatabase.CreateFolder("Assets", "NavMeshData");
+                string path = dir + "/" + dataName + ".asset";
+                AssetDatabase.DeleteAsset(path);
+                AssetDatabase.CreateAsset(data, path);
+                AssetDatabase.SaveAssets();
+                EditorUtility.SetDirty(surface);
+            }
+        }
+
+        // ===================== Level 3 (traced from the designer's top-down PNG) =====================
+        // Deterministic recreation of the designer's hand-drawn map (Downloads/Level 3.png). Each wall is a
+        // centreline segment traced from the image (55 bars). Walls are rendered THIN (0.25 m) even though the
+        // drawing strokes are ~2 m thick — that reclaims the drawn thickness as corridor width, so corridors end
+        // up ~4 m typical (wide enough for hospital props) without blowing up the world footprint. Start bottom-
+        // left, Finish top-right; 3 keys spread OFF the direct diagonal so the player is forced to weave.
+        // Because it's traced (not random), everyone who runs it gets an identical layout → commit-friendly.
+        private const float Ch4WorldWidth = 52f;      // metres across (X). Tune this one number to scale the map.
+        private const float Ch4AspectHW = 1.3162f;    // image H/W (4546/3454) → depth = width * this ≈ 68 m
+        private const float Ch4WallHeight = 3f;        // matches the maze (backrooms feel)
+        private const float Ch4WallThick = 0.25f;      // thin walls = wide corridors
+
+        // Normalised image coords: x 0→1 left→right, y 0→1 top→bottom.
+        private struct Seg { public float ax, ay, bx, by; }
+
+        private static readonly Seg[] Ch4Walls =
+        {
+            new(){ax=0.0069f,ay=0.0025f,bx=0.9928f,by=0.0025f},
+            new(){ax=0.1268f,ay=0.0890f,bx=0.1948f,by=0.0890f},
+            new(){ax=0.2849f,ay=0.0890f,bx=0.5122f,by=0.0890f},
+            new(){ax=0.5576f,ay=0.1079f,bx=0.7235f,by=0.1079f},
+            new(){ax=0.8095f,ay=0.1079f,bx=0.8422f,by=0.1079f},
+            new(){ax=0.8425f,ay=0.1268f,bx=0.8631f,by=0.1268f},
+            new(){ax=0.8882f,ay=0.1268f,bx=0.9928f,by=0.1268f},
+            new(){ax=0.5825f,ay=0.2064f,bx=0.6610f,by=0.2064f},
+            new(){ax=0.4395f,ay=0.2386f,bx=0.4676f,by=0.2386f},
+            new(){ax=0.4928f,ay=0.2386f,bx=0.5220f,by=0.2386f},
+            new(){ax=0.1951f,ay=0.2390f,bx=0.2221f,by=0.2390f},
+            new(){ax=0.2472f,ay=0.2390f,bx=0.3998f,by=0.2390f},
+            new(){ax=0.1262f,ay=0.2399f,bx=0.1520f,by=0.2399f},
+            new(){ax=0.4679f,ay=0.2672f,bx=0.7235f,by=0.2672f},
+            new(){ax=0.7846f,ay=0.3389f,bx=0.9928f,by=0.3389f},
+            new(){ax=0.4928f,ay=0.4071f,bx=0.5701f,by=0.4071f},
+            new(){ax=0.6207f,ay=0.4071f,bx=0.7235f,by=0.4071f},
+            new(){ax=0.8882f,ay=0.4374f,bx=0.9007f,by=0.4374f},
+            new(){ax=0.9433f,ay=0.4374f,bx=0.9928f,by=0.4374f},
+            new(){ax=0.5825f,ay=0.5197f,bx=0.8880f,by=0.5197f},
+            new(){ax=0.1262f,ay=0.5461f,bx=0.2470f,by=0.5461f},
+            new(){ax=0.3219f,ay=0.5461f,bx=0.4676f,by=0.5461f},
+            new(){ax=0.6503f,ay=0.7229f,bx=0.8405f,by=0.7229f},
+            new(){ax=0.0069f,ay=0.7335f,bx=0.5423f,by=0.7335f},
+            new(){ax=0.8564f,ay=0.8061f,bx=0.9928f,by=0.8061f},
+            new(){ax=0.1963f,ay=0.8109f,bx=0.7386f,by=0.8109f},
+            new(){ax=0.8350f,ay=0.9104f,bx=0.9273f,by=0.9104f},
+            new(){ax=0.0069f,ay=0.9973f,bx=0.9928f,by=0.9973f},
+            new(){ax=0.0033f,ay=0.0000f,bx=0.0033f,by=0.9998f},
+            new(){ax=0.9964f,ay=0.0000f,bx=0.9964f,by=0.9998f},
+            new(){ax=0.1142f,ay=0.0053f,bx=0.1142f,by=0.0983f},
+            new(){ax=0.6747f,ay=0.0053f,bx=0.6747f,by=0.0983f},
+            new(){ax=0.8652f,ay=0.0053f,bx=0.8652f,by=0.1991f},
+            new(){ax=0.2972f,ay=0.0334f,bx=0.2972f,by=0.0794f},
+            new(){ax=0.5699f,ay=0.1175f,bx=0.5699f,by=0.2158f},
+            new(){ax=0.4802f,ay=0.2292f,bx=0.4802f,by=0.2576f},
+            new(){ax=0.2347f,ay=0.2297f,bx=0.2347f,by=0.3975f},
+            new(){ax=0.1136f,ay=0.2305f,bx=0.1136f,by=0.3482f},
+            new(){ax=0.3557f,ay=0.2486f,bx=0.3557f,by=0.3495f},
+            new(){ax=0.7969f,ay=0.2578f,bx=0.7969f,by=0.3293f},
+            new(){ax=0.4802f,ay=0.2767f,bx=0.4802f,by=0.3390f},
+            new(){ax=0.7112f,ay=0.2767f,bx=0.7112f,by=0.3482f},
+            new(){ax=0.8560f,ay=0.3484f,bx=0.8560f,by=0.3975f},
+            new(){ax=0.1136f,ay=0.3863f,bx=0.1136f,by=0.5915f},
+            new(){ax=0.4802f,ay=0.3977f,bx=0.4802f,by=0.5915f},
+            new(){ax=0.8757f,ay=0.4281f,bx=0.8757f,by=0.4718f},
+            new(){ax=0.8757f,ay=0.4993f,bx=0.8757f,by=0.5101f},
+            new(){ax=0.6626f,ay=0.5293f,bx=0.6626f,by=0.5554f},
+            new(){ax=0.8311f,ay=0.5293f,bx=0.8311f,by=0.6544f},
+            new(){ax=0.6626f,ay=0.6001f,bx=0.6626f,by=0.7134f},
+            new(){ax=0.1136f,ay=0.6546f,bx=0.1136f,by=0.7239f},
+            new(){ax=0.4802f,ay=0.6546f,bx=0.4802f,by=0.7239f},
+            new(){ax=0.6215f,ay=0.8205f,bx=0.6215f,by=0.9945f},
+            new(){ax=0.7263f,ay=0.8601f,bx=0.7263f,by=0.9263f},
+            new(){ax=0.8224f,ay=0.8601f,bx=0.8224f,by=0.9716f},
+        };
+
+        // Plan points (normalised image coords), snapped to open space in the extraction step.
+        private static readonly Vector2 Ch4Spawn   = new(0.1335f, 0.8726f);
+        private static readonly Vector2 Ch4Exit    = new(0.9404f, 0.0449f);
+        private static readonly Vector2 Ch4Monster = new(0.5570f, 0.4655f);
+        private static readonly Vector2[] Ch4Keys =
+        {
+            new(0.2950f, 0.2849f), // upper-left
+            new(0.7455f, 0.5847f), // right-mid
+            new(0.5446f, 0.8693f), // bottom-centre
+        };
+
+        private const string Ch4LevelScenePath = "Assets/Scenes/Level3.unity";
+
+        [MenuItem("ProjectS/Build Level3 (designer PNG)")]
+        public static void BuildLevel3()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return; // never discard the maze silently
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+
+            float depth = Ch4WorldWidth * Ch4AspectHW;
+            var root = new GameObject("Level3");
+            Undo.RegisterCreatedObjectUndo(root, "Build Level3");
+
+            // Floor slab under the whole footprint.
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.name = "Floor";
+            floor.transform.SetParent(root.transform);
+            floor.transform.position = new Vector3(Ch4WorldWidth / 2f, -0.05f, depth / 2f);
+            floor.transform.localScale = new Vector3(Ch4WorldWidth, 0.1f, depth);
+            MarkNavigationStatic(floor);
+
+            // Walls: each traced centreline → one thin box.
+            int i = 0;
+            foreach (var s in Ch4Walls)
+            {
+                Vector3 a = Ch4ImgToWorld(s.ax, s.ay, depth);
+                Vector3 b = Ch4ImgToWorld(s.bx, s.by, depth);
+                bool horiz = Mathf.Abs(a.x - b.x) >= Mathf.Abs(a.z - b.z);
+                Vector3 center = (a + b) * 0.5f; center.y = Ch4WallHeight / 2f;
+                Vector3 scale = horiz
+                    ? new Vector3(Mathf.Abs(a.x - b.x) + Ch4WallThick, Ch4WallHeight, Ch4WallThick)
+                    : new Vector3(Ch4WallThick, Ch4WallHeight, Mathf.Abs(a.z - b.z) + Ch4WallThick);
+                CreateWall(root, (horiz ? "H_" : "V_") + i, center, scale);
+                i++;
+            }
+
+            BakeNavMesh(root); // 3 m ceiling-less greybox → default agent bakes fine
+
+            // Rig + 3 keys + exit on their planned spots.
+            var player = CreateGameplayActors(Ch4ImgToWorld(Ch4Spawn.x, Ch4Spawn.y, depth),
+                                              Ch4ImgToWorld(Ch4Monster.x, Ch4Monster.y, depth));
+            for (int k = 0; k < Ch4Keys.Length; k++)
+                CreateKey("Key_" + (k + 1), Ch4ImgToWorld(Ch4Keys[k].x, Ch4Keys[k].y, depth) + Vector3.up * 0.6f);
+            CreateExit(Ch4ImgToWorld(Ch4Exit.x, Ch4Exit.y, depth) + Vector3.up * 0.6f);
+
+            if (!AssetDatabase.IsValidFolder("Assets/Scenes")) AssetDatabase.CreateFolder("Assets", "Scenes");
+            EditorSceneManager.SaveScene(scene, Ch4LevelScenePath);
+
+            Selection.activeGameObject = player;
+            Debug.Log($"[Level3] Built {Ch4Walls.Length} walls ({Ch4WorldWidth:0}×{depth:0} m, thin {Ch4WallThick} m walls) + 3 keys + exit, " +
+                      $"navmesh baked, saved to {Ch4LevelScenePath}. Press Play — WASD + mouse. Tune Ch4WorldWidth to rescale.");
+        }
+
+        // Image (normalised) → world. X = right, Z = up/north. Image top (Finish) maps to MAX Z so the level
+        // reads the same way up as the drawing (Start bottom-left, Finish top-right).
+        private static Vector3 Ch4ImgToWorld(float nx, float ny, float depth) =>
+            new Vector3(nx * Ch4WorldWidth, 0f, (1f - ny) * depth);
 
         private static GameObject BuildMaze()
         {
