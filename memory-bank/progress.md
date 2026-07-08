@@ -39,6 +39,13 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-08 — Sappa — Level 3 Layout & Custom Editor Tools (PUSHED to feature branch)
+- **Editor Tooling (Props & Lighting):** Created `RandomizePropTool.cs` and `RandomizeClusterTool.cs` to randomly scatter hospital props across Level 3, preserving the user's base scale and orientation. 
+- **Lighting Polish & Debugging:** Investigated URP point light limits on large single meshes (the black floor bug). Provided the optimal Forward+ pipeline switch solution, and reverted custom experimental lighting tools at the user's request, ensuring a clean and stable `LightingTool.cs`.
+- **Level 3 Saved State:** The user successfully authored the prop and light layout using the tools and saved it to `PlacedObjects.unity`.
+- **Source Control:** Pushed these changes to the `feature/level3-layout-updates` branch.
+- **Next:** Proceed with whatever feature or polishing the user requests next (likely audio/haptics wiring, or tuning the current layout).
+
 ### 2026-07-08 — Sappa — Device wiring (haptics + touch) + monster redesign + ghost model (PUSHED)
 - **Stage 1 haptics wired** (`84b1e8c`): `HapticManager` wraps Core Haptics (proven pattern) — heartbeat
   (reads `InsanitySystem.HeartbeatBpm` → identical to the vignette breathe), jumpscare slam, confirm, cold-open
