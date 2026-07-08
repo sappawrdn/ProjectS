@@ -421,9 +421,9 @@ namespace ProjectS.EditorTools
             var level = GameObject.Find("Level3");
             if (level == null) { Debug.LogWarning("[Skin3] No 'Level3' — open Level3.unity or run 'Build Level3' first."); return; }
 
-            var wallMat  = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/TileTextureBase.png", "PSX3_Wall", Vector2.one);
-            var floorMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/FloorTile1.png", "PSX3_Floor", new Vector2(10f, 13f));
-            var ceilMat  = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/Ceiling1.png", "PSX3_Ceiling", new Vector2(10f, 13f));
+            var wallMat  = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/TileTexture2.png", "PSX3_Wall", Vector2.one);
+            var floorMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/FloorTile1.png", "PSX3_Floor", new Vector2(26f, 34f));
+            var ceilMat  = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/Ceiling1.png", "PSX3_Ceiling", new Vector2(26f, 34f));
             if (wallMat == null || floorMat == null || ceilMat == null) return;
 
             // Walls (per-wall tiling) + floor.
@@ -779,9 +779,9 @@ namespace ProjectS.EditorTools
                 return;
             }
 
-            var wallMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/TileTextureBase.png", "PSX_Wall", new Vector2(2f, 1.5f));
-            var floorMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/FloorTile1.png", "PSX_Floor", new Vector2(7f, 7f));
-            var ceilMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/Ceiling1.png", "PSX_Ceiling", new Vector2(7f, 7f));
+            var wallMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/TileTexture2.png", "PSX_Wall", new Vector2(2f, 1.5f));
+            var floorMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/FloorTile1.png", "PSX_Floor", new Vector2(14f, 14f));
+            var ceilMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/Ceiling1.png", "PSX_Ceiling", new Vector2(14f, 14f));
             if (wallMat == null || floorMat == null || ceilMat == null) return;
 
             // Textures on walls + floor.
@@ -1277,6 +1277,9 @@ namespace ProjectS.EditorTools
             mat.SetTexture("_BaseMap", tex);
             mat.mainTexture = tex;
             mat.SetTextureScale("_BaseMap", tiling);
+            mat.SetFloat("_Smoothness", 0f); // Kill specular highlights in the dark
+            mat.SetFloat("_SpecularHighlights", 0f);
+            mat.SetFloat("_EnvironmentReflections", 0f);
             return mat;
         }
 
