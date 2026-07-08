@@ -108,14 +108,18 @@ namespace ProjectS
             float delta = 0f;
 
             // Proximity to the monster (only counts a live threat, not a dormant Static one).
+            // DISABLED FOR PLAYTESTING: Monster proximity no longer raises insanity
+            /*
             if (_monster != null && _monster.Tier != MonsterTier.Static)
             {
                 float dist = Vector3.Distance(_player.position, _monster.transform.position);
                 if (dist < _nearRadius)
                     delta += ((_nearRadius - dist) / _nearRadius) * _nearGain;
             }
-
-            delta += moving ? _moveGain : -_idleDecay;
+            */
+            // DISABLED FOR PLAYTESTING: Walking no longer raises insanity
+            // delta += moving ? _moveGain : -_idleDecay;
+            delta += -_idleDecay; // Only decay, no gain from moving
 
             Insanity = Mathf.Clamp01(Insanity + delta * Time.deltaTime);
         }

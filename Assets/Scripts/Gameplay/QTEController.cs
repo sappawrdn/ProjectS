@@ -56,11 +56,16 @@ namespace ProjectS
 
         private bool CanTrigger()
         {
+            // DISABLED FOR PLAYTESTING (as requested)
+            return false;
+
+            /*
             if (_monster == null || _playerT == null) return false;
             if (GameState.Instance != null && GameState.Instance.State != GameState.RunState.Playing) return false;
             if (_monster.Tier == MonsterTier.Static) return false; // dormant — no encounter
             if (_monster.IsBusy) return false;                     // stunned/frozen → your escape window
             return Vector3.Distance(_monster.transform.position, _playerT.position) <= _proximityRadius;
+            */
         }
 
         private void StartQte()

@@ -235,6 +235,9 @@ namespace ProjectS
 
         private void TickPredator()
         {
+            // DISABLED FOR PLAYTESTING: Prevent monster from chasing
+            return;
+
             float aggro = Aggression;
             float dist = Vector3.Distance(transform.position, _player.position);
 
