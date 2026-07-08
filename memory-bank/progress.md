@@ -39,6 +39,36 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-08 — Sappa — Device wiring (haptics + touch) + monster redesign + ghost model (PUSHED)
+- **Stage 1 haptics wired** (`84b1e8c`): `HapticManager` wraps Core Haptics (proven pattern) — heartbeat
+  (reads `InsanitySystem.HeartbeatBpm` → identical to the vignette breathe), jumpscare slam, confirm, cold-open
+  pulse. Self-bootstrap + DontDestroyOnLoad; editor no-ops (felt on device). Wired into Insanity/GameState/
+  ScareDirector.
+- **Mobile touch controls** (`84b1e8c`): `PlayerController` left-half move joystick + right-half look drag
+  (EnhancedTouch); GameState + QTE take a screen tap (begin/restart/solve). Debug HUD respects `Screen.safeArea`
+  (notch). **Verified on device** (build recipe in Phase 0 entry; build to `Builds/` → Append → Xcode Run).
+- **Monster AI redesign** (`ea6c0e2`) — DESIGN PIVOT from the key-gated Static/Watcher/Hunter tiers (owner felt
+  the teleporting Watcher was gamey). Now: **one persistent predator, hunts from run start but SOFT**; an
+  `Aggression` value (0..1) ramps with time + keys and modulates speed (2.2→2.9), sight, hearing, and give-up.
+  **Senses:** sight (LOS) + **hearing** (moving = heard without LOS; standing still = silent = the reliable
+  hide) + **fear-as-volume-knob** (insanity widens both — but freezing still saves you, so no death spiral).
+  Kept fair: hysteresis, breathing room, non-fatal catches. `Retire()` dormants it for the scare-free finale.
+- **Ghost model** (`ea6c0e2`): designer's Mixamo FBX. `ProjectS > Set Up Ghost Monster` configures imports
+  (Humanoid retarget, loop flags, 1K texture), builds material + Idle/Walk/Attack AnimatorController, swaps the
+  capsule for the animated model. `MonsterVisual` drives it. **Caveats:** the ghost is MENU-APPLIED, not saved
+  into `Level3.unity` (a fresh pull shows the red capsule → run the menu, or bake it into the scene + commit).
+  The 2 unused turn FBX are gitignored (kept local, saves ~48 MB).
+- **HONEST AI assessment (owner asked, no yes-man): ~6.5/10 now.** Good = the FAIR skeleton (sense-based,
+  hysteresis, breathing room, aggression ramp — the hard part). Missing (why not 9-10), in impact order:
+  1. **Audio** — it's currently SILENT; the by-ear pillar needs you to HEAR it coming. Biggest gap. **← next.**
+  2. **Patrol/search** — on losing you it walks to the single last-known point then idles; doesn't wander/check
+     nearby rooms. Predictable ("it always goes exactly where I was"). Needs a real search behaviour.
+  3. **Spawn tuning** — currently centre-of-map ("away from player"), NOT optimized. Best = out of the player's
+     line-of-sight, distanced so it reaches you in ~15-25 s, ideally a designed first-reveal.
+  4. **Noise nuance** (run ≠ walk loudness) + a distraction/bait; occasional flank/cutoff (anticipate heading).
+- **Next:** Stage 2 **AudioDirector** (ambient hum + monster sound that follows it + audio beacons on key/exit;
+  Unity 3D AudioSource first for editor-verify, PHASE upgrade later). Then a monster **search/patrol** pass.
+
 ### 2026-07-08 — Sappa — Level3: designer top-down map → deterministic greybox (COMMITTED + PUSHED)
 - **Designer handed a top-down PNG** (`~/Downloads/Level 3.png`, Start bottom-left / Finish top-right). Traced
   it deterministically (not the random maze): thresholded the grey walls (lum 83) vs black text, split each
