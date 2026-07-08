@@ -129,3 +129,17 @@ Thumbs.db
 /Assets/Ghost/Left Turn 90.fbx.meta
 /Assets/Ghost/Right Turn.fbx
 /Assets/Ghost/Right Turn.fbx.meta
+
+# ==============================================================
+# Audio: radio.wav deferred (41 MB, not wired yet) — keep local, commit later if used.
+# ==============================================================
+/Assets/_Project/Audio/TIER 2/radio.wav
+/Assets/_Project/Audio/TIER 2/radio.wav.meta
+
+# Abandoned CH4-Map1 FBX/USDZ detour + its scene/navmesh (superseded by Level3/PlacedObjects).
+/Assets/Scenes/CH4-Map1.unity
+/Assets/Scenes/CH4-Map1.unity.meta
+/Assets/NavMeshData/CH4-Map1-NavMesh.asset
+/Assets/NavMeshData/CH4-Map1-NavMesh.asset.meta
+/Assets/_Project/Levels/
+/Assets/_Project/Levels.meta

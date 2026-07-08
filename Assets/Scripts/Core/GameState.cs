@@ -29,6 +29,10 @@ namespace ProjectS
         public int CatchCount { get; private set; }
         public RunState State { get; private set; } = RunState.MainMenu;
 
+        /// <summary>Set by the MainMenu scene's START before loading the game so it drops straight into the run
+        /// (the real menu already happened — skip the greybox one).</summary>
+        public static bool AutoBeginNextLoad;
+
         private void Awake()
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -41,6 +45,7 @@ namespace ProjectS
             if (_monster == null) _monster = FindFirstObjectByType<MonsterAI>();
             if (_player == null) _player = FindFirstObjectByType<PlayerController>();
             EnterMainMenu();
+            if (AutoBeginNextLoad) { AutoBeginNextLoad = false; BeginRun(); } // came from the real menu → play now
         }
 
         private void Update()

@@ -39,6 +39,32 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-09 — Sappa — Front-end (menu+intro), VHS+4:3, device build fixes, teammate merge
+- **Merged the teammate's branch** `feature/level3-layout-updates` (his `PlacedObjects.unity` = Level3 + his
+  scattered props/lighting + editor tools `RandomizePropTool`/`RandomizeClusterTool`/`LightingTool`). His edits
+  to Insanity/QTE/MonsterAI were "disable-for-playtesting" hacks — DISCARDED (kept our proper balance/QTE/monster
+  fixes); took his scene/tools/art. **PlacedObjects is now THE game scene** (superset; Level3 is the backup).
+- **Main-menu flow** (separate `MainMenu.unity`, build index 0 → `PlacedObjects`): `MainMenuController` plays the
+  ONBOARDING video (auto-advances) → the MENU video (START/SETTINGS baked in) with INVISIBLE tap buttons over the
+  text (`_startRect`/`_settingsRect`, nudgeable). Cold-open haptic pulse. Videos: Prepare→frame-0 + skipOnDrop
+  false + RT cleared black (fixed the grey-flash / cut intro). `GameState.AutoBeginNextLoad` drops straight into
+  the run. `MenuSceneSetup` builds it.
+- **VHS overlay** (`VHSOverlay` + `ProjectS/VHSAdditive` shader, `VideoFxSetup`): full-screen additive video
+  (black→transparent), sized to the 4:3 box, gameplay-only, `SetSuppressed` for Reduce-Flashing/nightmare.
+- **4:3** (`AspectRatioEnforcer`) — REWRITTEN to UI black bars (was camera-rect + a 2nd camera, which went BLACK
+  on device). Now 4:3 everywhere (menu + game).
+- **DEVICE BUILD FIXES (the black-screen saga):** (1) `Mobile_Renderer` → Forward+ (mobile was plain Forward,
+  per-object light limit 4 with 32 realtime lights + ambient 0 = dark floor). (2) The camera-rect 4:3 blacked the
+  whole render on device → fixed by the UI-bar rewrite. (3) **The real killer:** `VHSAdditive` shader was STRIPPED
+  from the device build (runtime `Shader.Find`, not referenced) → additive failed → the VHS video's black bg
+  covered the game. Fix: add `ProjectS/VHSAdditive` to **Graphics > Always Included Shaders** + a faint-alpha
+  fallback. Audio "no sound" = the phone was on silent (setup was fine).
+- **Assets committed** (for teammate 1:1): audio (`_Project/Audio`, ~132 MB — `radio.wav` gitignored, unused) +
+  videos (`_Project/Video`, ~37 MB) + the VHS shader. Plain git (no LFS yet — revisit if the repo balloons).
+- **✅ Full launch→play loop runs on a real iPhone:** onboarding → menu → START → 4:3 + VHS + lighting + audio +
+  haptics + touch. **Next:** SETTINGS/options screen (Haptic-Primary + Reduce-Flashing toggles), the eyes-off
+  nightmare mode, audio-plays-in-silent-mode (AVAudioSession Playback), playtest tuning, PHASE spatial upgrade.
+
 ### 2026-07-08 — Sappa — AudioDirector + monster smarts + QTE upgrade + balance pass
 - **AudioDirector** (`Assets/Scripts/Core/AudioDirector.cs`, committed `3c871cd`): poll-based spatial mixer for
   the sound engineer's clips (2D ambient/vhs/heartbeat/breath, 3D monster crossfade + beacons + footsteps,
