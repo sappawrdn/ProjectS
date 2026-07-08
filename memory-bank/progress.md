@@ -39,6 +39,30 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-08 — Sappa — AudioDirector + monster smarts + QTE upgrade + balance pass
+- **AudioDirector** (`Assets/Scripts/Core/AudioDirector.cs`, committed `3c871cd`): poll-based spatial mixer for
+  the sound engineer's clips (2D ambient/vhs/heartbeat/breath, 3D monster crossfade + beacons + footsteps,
+  one-shots). `ProjectS > Set Up Audio` configures imports + wires it. **Audio assets (~150 MB) NOT committed
+  yet** — big; `radio.wav` deferred/ignored. Wall-bump feedback (both modes) + phantom Event B (first key
+  pickup; real monster left hunting).
+- **Monster smarts** (`MonsterAI.cs`): patrol/search (investigate around last-known → wander), systemic
+  **spawn tuning** (warp ~14–22 m out of the player's line of sight on run start). **Escape fix (key):** the
+  FAST chase now comes from SIGHT only — losing line of sight drops it to a slow investigate; hearing only
+  makes it creep toward you (slow, so you outpace it). This fixed "impossible to escape" (hearing used to grant
+  full lock-on). Sight IS wall-blocked (Physics.Linecast + wall colliders, walls 3 m > eye 1.5 m).
+- **QTE upgrade** (`QTEController.cs`): the green safe zone **shrinks** each round (46°→14° over 1.4 s → tap
+  fast) and the sweep **reverses direction** on each hit. Visual: a **black-&-white thick ring** (solid band,
+  not dots) with the needle + big corner HITS/MISS counters (reference-style), + juice (ring pulse on hit,
+  white flash + screen shake on miss). Still IMGUI greybox; full collage look needs art (brief later).
+- **Balance pass (playtest-driven — playtest > math):** the insanity feedback loop was too strong (BPM maxed
+  from a little walking; couldn't shake the monster). Toned down: `_moveGain 0.06→0.02`, `_nearGain 0.22→0.10`,
+  `_idleDecay 0.07→0.14` (BPM breathes, ~7 s to calm when hiding); `_sightInsanityBonus 6→3`,
+  `_hearRadius 4/8→3/6`, `_hearInsanityBonus 4→2` (panic no longer makes it omniscient). Escalation curve
+  (chase 2.2→2.9 vs player 2.5; outrun early → outpaced late) is well-tuned; left alone.
+- **Next:** playtest the balance again (may now be slightly too easy — bump sight/chase persistence if so);
+  commit the audio assets (size decision); main-menu video-loop background (MP4/H.264 via VideoPlayer, art
+  pending); the collage QTE art + VHS post-processing (both art-pending). Then Haptic-Primary/nightmare mode.
+
 ### 2026-07-08 — Sappa — Device wiring (haptics + touch) + monster redesign + ghost model (PUSHED)
 - **Stage 1 haptics wired** (`84b1e8c`): `HapticManager` wraps Core Haptics (proven pattern) — heartbeat
   (reads `InsanitySystem.HeartbeatBpm` → identical to the vignette breathe), jumpscare slam, confirm, cold-open

@@ -22,9 +22,22 @@ namespace ProjectS
 
         [Header("Needle minigame (architecture.md)")]
         [SerializeField] private float _sweepSeconds = 1.7f;   // per full 360° sweep
-        [SerializeField] private float _greenZoneWidth = 46f;  // degrees → ~0.22s tap window
+        [SerializeField] private float _greenZoneMax = 46f;    // green width at the start of a round
+        [SerializeField] private float _greenZoneMin = 14f;    // shrinks to this (thread-the-needle) → tap FAST
+        [SerializeField] private float _shrinkSeconds = 1.4f;  // time for the green to go max→min
         [SerializeField] private int _hitsToWin = 3;
         [SerializeField] private int _failsToLose = 3;
+
+        [Header("Ring look (thickness, not size — black & white)")]
+        [SerializeField] private float _ringRadiusFrac = 0.18f;  // radius as a fraction of the short screen side
+        [SerializeField] private float _ringThickness = 8f;      // track line thickness
+        [SerializeField] private float _safeThickness = 16f;     // safe-zone line thickness (chunkier)
+
+        [Header("Juice (hit/miss feedback)")]
+        [SerializeField] private float _flashSeconds = 0.28f;
+        [SerializeField] private float _shakeSeconds = 0.25f;
+        [SerializeField] private float _shakePixels = 14f;
+        [SerializeField] private float _pulseSeconds = 0.22f;
 
         [Header("Resolution (architecture.md)")]
         [SerializeField] private float _winStunSeconds = 4f;
@@ -38,6 +51,14 @@ namespace ProjectS
         private int _hits;
         private int _fails;
         private float _cooldownTimer;
+        private float _roundTime;     // time since the last tap — the green shrinks over this
+        private float _sweepDir = 1f; // +1 / -1, flips on each successful hit
+        private float _flashTimer, _shakeTimer, _pulseTimer;
+        private Color _flashColor = Color.red;
+
+        // Green shrinks from max→min the longer you wait in the current round (pressure to tap fast).
+        private float CurrentGreenWidth =>
+            Mathf.Lerp(_greenZoneMax, _greenZoneMin, _roundTime / Mathf.Max(0.01f, _shrinkSeconds));
 
         private void Awake()
         {
@@ -49,6 +70,9 @@ namespace ProjectS
         private void Update()
         {
             if (_cooldownTimer > 0f) _cooldownTimer -= Time.deltaTime;
+            if (_flashTimer > 0f) _flashTimer -= Time.deltaTime;
+            if (_shakeTimer > 0f) _shakeTimer -= Time.deltaTime;
+            if (_pulseTimer > 0f) _pulseTimer -= Time.deltaTime;
 
             if (_active) { TickQte(); return; }
             if (_cooldownTimer <= 0f && CanTrigger()) StartQte();
@@ -69,6 +93,8 @@ namespace ProjectS
             _hits = 0;
             _fails = 0;
             _needle = 0f;
+            _roundTime = 0f;
+            _sweepDir = 1f;
             RandomizeGreen();
             AudioDirector.Instance?.MonsterAttack(); // creature attack as the encounter opens
             _player?.SetInputEnabled(false); // freeze the player during the overlay
@@ -77,16 +103,29 @@ namespace ProjectS
 
         private void TickQte()
         {
-            _needle = (_needle + (360f / _sweepSeconds) * Time.deltaTime) % 360f;
+            _roundTime += Time.deltaTime; // the green shrinks as this grows
+            _needle = Mathf.Repeat(_needle + _sweepDir * (360f / _sweepSeconds) * Time.deltaTime, 360f);
 
             // Tap the screen (device) or press [Space] (editor). Player is frozen here, so a tap only hits the QTE.
             bool tapped = (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
                           || (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame);
             if (!tapped) return;
 
-            if (Mathf.Abs(Mathf.DeltaAngle(_needle, _greenCenter)) <= _greenZoneWidth * 0.5f) _hits++;
-            else _fails++;
+            if (Mathf.Abs(Mathf.DeltaAngle(_needle, _greenCenter)) <= CurrentGreenWidth * 0.5f)
+            {
+                _hits++;
+                _sweepDir *= -1f; // reverse the sweep direction after a successful tap
+                _pulseTimer = _pulseSeconds;                                   // ring pulses on a hit
+                _flashColor = Color.white; _flashTimer = _flashSeconds * 0.4f; // faint white pop
+            }
+            else
+            {
+                _fails++;
+                _flashColor = Color.white; _flashTimer = _flashSeconds; // harsh white flash (static/camera)
+                _shakeTimer = _shakeSeconds;                            // + screen shake
+            }
 
+            _roundTime = 0f;   // fresh round → green resets to max
             RandomizeGreen();
 
             if (_hits >= _hitsToWin) Resolve(true);
@@ -122,28 +161,80 @@ namespace ProjectS
             if (!_active) return;
 
             float w = Screen.width, h = Screen.height;
-            Vector2 center = new Vector2(w / 2f, h / 2f);
-            float radius = Mathf.Min(w, h) * 0.18f;
-            Texture2D tex = Texture2D.whiteTexture;
+            var tex = Texture2D.whiteTexture;
             Matrix4x4 prev = GUI.matrix;
 
-            // Green target zone.
-            GUI.color = new Color(0.1f, 0.9f, 0.2f, 0.9f);
-            GUIUtility.RotateAroundPivot(_greenCenter, center);
-            float arcWidth = radius * Mathf.Deg2Rad * _greenZoneWidth;
-            GUI.DrawTexture(new Rect(center.x - arcWidth / 2f, center.y - radius - 8f, arcWidth, 14f), tex);
-            GUI.matrix = prev;
+            Vector2 center = new Vector2(w / 2f, h / 2f);
+            if (_shakeTimer > 0f) // screen shake on a miss
+            {
+                float m = _shakeTimer / _shakeSeconds * _shakePixels;
+                center += new Vector2(Random.Range(-m, m), Random.Range(-m, m));
+            }
 
-            // Sweeping needle.
+            float radius = Mathf.Min(w, h) * _ringRadiusFrac; // fixed size — hits get THICKER, not bigger
+            float pulse = _pulseTimer > 0f ? _pulseTimer / _pulseSeconds : 0f; // 0..1 on a hit
+
+            // The ring track — solid grey band (dim). Thickens briefly on a hit.
+            DrawArc(center, radius, _ringThickness + pulse * 4f, 0f, 360f, new Color(0.55f, 0.55f, 0.55f, 0.75f), tex, prev);
+
+            // The safe arc — solid WHITE band (chunkier). Its width shrinks each round.
+            float gw = CurrentGreenWidth;
+            DrawArc(center, radius, _safeThickness + pulse * 8f, _greenCenter - gw / 2f, _greenCenter + gw / 2f, Color.white, tex, prev);
+
+            // The sweeping needle (white, thick).
             GUI.color = Color.white;
             GUIUtility.RotateAroundPivot(_needle, center);
-            GUI.DrawTexture(new Rect(center.x - 2f, center.y - radius, 4f, radius), tex);
+            GUI.DrawTexture(new Rect(center.x - 3f, center.y - radius - _safeThickness / 2f, 6f, radius + _safeThickness / 2f), tex);
             GUI.matrix = prev;
 
+            // Full-screen white flash (harsh on a miss, faint on a hit).
+            if (_flashTimer > 0f)
+            {
+                var c = _flashColor; c.a = _flashTimer / _flashSeconds * 0.4f;
+                GUI.color = c;
+                GUI.DrawTexture(new Rect(0f, 0f, w, h), tex);
+                GUI.color = Color.white;
+            }
+
+            // Big black-&-white counters in the corners (like the reference's HEALTH / CASH).
+            DrawBigCounter(40f, h - 160f, "HITS", _hits, TextAnchor.LowerLeft, tex);
+            DrawBigCounter(w - 40f, h - 160f, "MISS", _fails, TextAnchor.LowerRight, tex);
+        }
+
+        // A solid arc band around the circle (tangential segments overlapped → no gaps). Thickness = radial "tebal".
+        private void DrawArc(Vector2 c, float radius, float thickness, float from, float to, Color color, Texture2D tex, Matrix4x4 baseMatrix)
+        {
+            const float step = 4f;
+            float segW = radius * Mathf.Deg2Rad * step * 1.8f; // tangential length, overlapped for a solid band
+            GUI.color = color;
+            for (float a = from; a <= to; a += step)
+            {
+                GUIUtility.RotateAroundPivot(a, c);
+                GUI.DrawTexture(new Rect(c.x - segW / 2f, c.y - radius - thickness / 2f, segW, thickness), tex);
+                GUI.matrix = baseMatrix;
+            }
             GUI.color = Color.white;
-            var style = new GUIStyle(GUI.skin.label) { fontSize = 20, alignment = TextAnchor.MiddleCenter };
-            GUI.Label(new Rect(0f, center.y + radius + 12f, w, 30f),
-                $"TAP the screen in the GREEN!    Hits {_hits}/{_hitsToWin}    Fails {_fails}/{_failsToLose}", style);
+        }
+
+        // Big bold count (value) with a small label above it, black shadow for readability. Reference-style.
+        private void DrawBigCounter(float x, float y, string label, int value, TextAnchor anchor, Texture2D tex)
+        {
+            const float boxW = 320f;
+            bool left = anchor == TextAnchor.LowerLeft;
+            var small = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = anchor };
+            var big = new GUIStyle(GUI.skin.label) { fontSize = 84, fontStyle = FontStyle.Bold, alignment = anchor };
+            Rect labelR = new Rect(left ? x : x - boxW, y, boxW, 34f);
+            Rect numR = new Rect(left ? x : x - boxW, y + 30f, boxW, 100f);
+            ShadowLabel(labelR, label, small);
+            ShadowLabel(numR, value.ToString(), big);
+        }
+
+        private void ShadowLabel(Rect r, string txt, GUIStyle style)
+        {
+            var shadow = new GUIStyle(style); shadow.normal.textColor = Color.black;
+            GUI.Label(new Rect(r.x + 3f, r.y + 3f, r.width, r.height), txt, shadow);
+            style.normal.textColor = Color.white;
+            GUI.Label(r, txt, style);
         }
     }
 }

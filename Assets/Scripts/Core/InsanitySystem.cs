@@ -17,9 +17,9 @@ namespace ProjectS
     {
         [Header("Accumulation / decay (architecture.md, per second)")]
         [SerializeField] private float _nearRadius = 6f;
-        [SerializeField] private float _nearGain = 0.22f;   // × closeness (0..1) when within nearRadius
-        [SerializeField] private float _moveGain = 0.06f;   // while moving
-        [SerializeField] private float _idleDecay = 0.07f;  // while not moving
+        [SerializeField] private float _nearGain = 0.10f;   // × closeness (0..1) when within nearRadius
+        [SerializeField] private float _moveGain = 0.02f;   // while moving (very low: walking barely raises fear)
+        [SerializeField] private float _idleDecay = 0.14f;  // while not moving (fast recovery when you hide)
         [SerializeField] private float _moveThreshold = 0.1f; // m/s to count as "moving"
 
         [Header("Heartbeat + vignette")]

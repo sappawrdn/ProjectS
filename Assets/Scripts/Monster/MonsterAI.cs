@@ -46,24 +46,34 @@ namespace ProjectS
         [Header("Speed (lerped by aggression) — a touch above the player, escape by juking")]
         [SerializeField] private float _chaseSpeedMin = 2.2f;
         [SerializeField] private float _chaseSpeedMax = 2.9f;
-        [SerializeField] private float _stalkSpeed = 0.9f;       // creep to last-known when it loses you
 
         [Header("Sight (walls block line-of-sight)")]
         [SerializeField] private float _sightRangeMin = 7f;      // low aggression
         [SerializeField] private float _sightRangeMax = 10f;     // high aggression
         [SerializeField] private float _loseRange = 20f;         // hysteresis: only drops beyond this
-        [SerializeField] private float _sightInsanityBonus = 6f; // fear widens sight
+        [SerializeField] private float _sightInsanityBonus = 3f; // fear widens sight (toned down so panic ≠ omniscient)
 
         [Header("Hearing (moving = heard w/o line-of-sight; still = silent)")]
-        [SerializeField] private float _hearRadiusMin = 4f;      // low aggression
-        [SerializeField] private float _hearRadiusMax = 8f;      // high aggression
-        [SerializeField] private float _hearInsanityBonus = 4f;  // fear sharpens hearing too
+        [SerializeField] private float _hearRadiusMin = 3f;      // low aggression
+        [SerializeField] private float _hearRadiusMax = 6f;      // high aggression
+        [SerializeField] private float _hearInsanityBonus = 2f;  // fear sharpens hearing (toned down so you can hide)
         [SerializeField] private float _playerMoveThreshold = 0.4f; // m/s to count as "making noise"
 
         [Header("Give-up / breathing room")]
         [SerializeField] private float _searchMin = 2f;          // low aggression gives up fast
         [SerializeField] private float _searchMax = 6f;          // high aggression searches long
         [SerializeField] private float _winSearchSeconds = 4f;   // forced breathing room after a won QTE
+
+        [Header("Search & patrol (when it loses you)")]
+        [SerializeField] private float _searchSpeed = 1.2f;      // poking around your last-known spot
+        [SerializeField] private float _patrolSpeed = 1.5f;      // wandering after it gives up
+        [SerializeField] private float _searchRadius = 6f;       // how far around last-known it checks
+        [SerializeField] private float _patrolRadius = 18f;      // wander range
+        [SerializeField] private float _reachThreshold = 1.5f;   // "arrived at destination" distance
+
+        [Header("Spawn (out of the player's sight, tuned distance)")]
+        [SerializeField] private float _spawnDistMin = 14f;
+        [SerializeField] private float _spawnDistMax = 22f;
 
         [Header("Fear (InsanitySystem feeds this)")]
         [SerializeField, Range(0f, 1f)] private float _insanity = 0f;
@@ -174,6 +184,33 @@ namespace ProjectS
         {
             _runTime = 0f;              // aggression starts ramping from run start
             SetTier(MonsterTier.Hunter);
+            RepositionSpawn();          // start out of sight at a tuned distance, not on top of the player
+        }
+
+        // Warp to a navmesh point ~spawnDist from the player and, ideally, out of their line of sight — so the
+        // first encounter is a designed distance, not an instant catch. Systemic, so it works in any scene.
+        private void RepositionSpawn()
+        {
+            if (_player == null || _agent == null || !_agent.isOnNavMesh) return;
+            Vector3 fallback = transform.position; bool found = false;
+            for (int i = 0; i < 24; i++)
+            {
+                float ang = Random.Range(0f, Mathf.PI * 2f);
+                float d = Random.Range(_spawnDistMin, _spawnDistMax);
+                Vector3 cand = _player.position + new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * d;
+                if (!NavMesh.SamplePosition(cand, out NavMeshHit hit, 4f, NavMesh.AllAreas)) continue;
+                fallback = hit.position; found = true;
+                if (BlockedFromPlayer(hit.position)) { _agent.Warp(hit.position); _lastKnownPos = hit.position; return; }
+            }
+            if (found) { _agent.Warp(fallback); _lastKnownPos = fallback; } // couldn't find hidden → at least distanced
+        }
+
+        // True if a wall sits between the player and pos (i.e. the spawn is out of sight).
+        private bool BlockedFromPlayer(Vector3 pos)
+        {
+            Vector3 eye = _player.position + Vector3.up * _playerHeadHeight;
+            Vector3 target = pos + Vector3.up * _eyeHeight;
+            return Physics.Linecast(eye, target, out RaycastHit hit) && hit.transform != _player && !hit.transform.IsChildOf(_player);
         }
 
         /// <summary>Retire the monster for the scare-free final section (GDD): it goes dormant.</summary>
@@ -243,19 +280,20 @@ namespace ProjectS
 
             bool los = HasLineOfSight();
             bool sees = dist <= effSight && los;
-            bool hears = _playerSpeed > _playerMoveThreshold && dist <= hearR; // still = silent = safe
+            bool hearsMoving = _playerSpeed > _playerMoveThreshold && dist <= hearR; // moving = noisy; still = silent
 
-            // Awareness: gain if it sees OR hears you; drop when it can do NEITHER (freeze + break LOS to hide),
-            // or you're simply beyond loseRange.
+            // Full lock-on (the FAST chase) comes ONLY from SIGHT. The instant it loses sight it drops to a slow
+            // investigate — so breaking line of sight + moving lets you pull away (you're faster than its search).
             if (!_aware)
             {
-                if (sees || hears) { _aware = true; _searchTimer = 0f; }
+                if (sees) { _aware = true; _searchTimer = 0f; }
             }
-            else if (dist > _loseRange || (!sees && !hears))
+            else if (dist > _loseRange || !sees)
             {
                 _aware = false;
                 _lastKnownPos = _player.position;
-                _searchTimer = Mathf.Lerp(_searchMin, _searchMax, aggro); // soft gives up fast
+                _searchTimer = Mathf.Lerp(_searchMin, _searchMax, aggro);
+                _agent.SetDestination(_lastKnownPos);
             }
 
             if (_aware)
@@ -264,12 +302,45 @@ namespace ProjectS
                 _lastKnownPos = _player.position;
                 _agent.SetDestination(_player.position);
             }
-            else
+            else if (hearsMoving)
             {
-                _agent.speed = _stalkSpeed;
-                if (_searchTimer > 0f) _searchTimer -= Time.deltaTime;
+                // Can't see you but HEARS you moving nearby → creep toward you SLOWLY (you outpace it) and keep the
+                // trail warm. Round a corner + keep moving and it can't quite pin you down.
+                _agent.speed = _searchSpeed;
+                _lastKnownPos = _player.position;
+                _searchTimer = Mathf.Max(_searchTimer, 1.5f);
                 _agent.SetDestination(_lastKnownPos);
             }
+            else if (_searchTimer > 0f)
+            {
+                // Investigate around your last-known spot.
+                _searchTimer -= Time.deltaTime;
+                _agent.speed = _searchSpeed;
+                if (ReachedDestination()) _agent.SetDestination(RandomNavPoint(_lastKnownPos, _searchRadius));
+            }
+            else
+            {
+                // Given up → patrol (wander) so it keeps hunting instead of freezing.
+                _agent.speed = _patrolSpeed;
+                if (ReachedDestination()) _agent.SetDestination(RandomNavPoint(transform.position, _patrolRadius));
+            }
+        }
+
+        private bool ReachedDestination()
+        {
+            return !_agent.pathPending && _agent.remainingDistance <= _reachThreshold
+                   && (!_agent.hasPath || _agent.velocity.sqrMagnitude < 0.25f);
+        }
+
+        private Vector3 RandomNavPoint(Vector3 center, float radius)
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                Vector2 c = Random.insideUnitCircle * radius;
+                Vector3 cand = center + new Vector3(c.x, 0f, c.y);
+                if (NavMesh.SamplePosition(cand, out NavMeshHit hit, radius, NavMesh.AllAreas)) return hit.position;
+            }
+            return center;
         }
 
         // Walls block sight. The monster is on the Ignore Raycast layer so it never intercepts its own ray.
