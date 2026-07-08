@@ -89,6 +89,7 @@ namespace ProjectS
                 _monster.TeleportTo(hit.position);
             _monster.SetFrozen(true);
             _monster.FaceInstant(_player.position);
+            _monster.GetComponentInChildren<MonsterVisual>()?.PlayAttack(); // lunge animation (if the model's set up)
 
             _insanity?.Spike(_jumpscareInsanity);
             HapticManager.Instance?.Jumpscare(); // violent slam on device (no-op in editor)

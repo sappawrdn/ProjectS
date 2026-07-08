@@ -120,3 +120,12 @@ Thumbs.db
 # Blender install to import).
 /Assets/PSXBackrooms/Blender/
 /Assets/PSXBackrooms/Blender.meta
+
+# ==============================================================
+# Ghost monster — unused Mixamo turn animations. Kept locally but NOT committed
+# (the AnimatorController only uses Idle/Walking/Zombie Attack) → saves ~48 MB.
+# ==============================================================
+/Assets/Ghost/Left Turn 90.fbx
+/Assets/Ghost/Left Turn 90.fbx.meta
+/Assets/Ghost/Right Turn.fbx
+/Assets/Ghost/Right Turn.fbx.meta

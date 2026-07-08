@@ -4,44 +4,68 @@ using UnityEngine.InputSystem;
 
 namespace ProjectS
 {
+    // Kept for compatibility with existing checks (QTE/Insanity ask "is it a live threat?").
+    //   Static = dormant (before the run starts, or retired in the final section).
+    //   Hunter = the active predator. (Watcher is deprecated — the teleporting tier was cut.)
     public enum MonsterTier { Static, Watcher, Hunter }
 
     /// <summary>
-    /// The predator FSM (architecture.md). Key count sets the tier (Static → Watcher → Hunter);
-    /// insanity modulates aggression within a tier (wired later by InsanitySystem).
-    ///   Static  — dormant.
-    ///   Watcher — teleports around the player at intervals, never inside QTE range (min distance).
-    ///   Hunter  — NavMeshAgent chase when aware (within sight + line-of-sight); when it loses you it
-    ///             creeps to your last-known spot and searches. Awareness has hysteresis (gain within
-    ///             sightRange, drop only beyond loseRange) so it feels like hunting, not heat-seeking.
-    /// All tuning is [SerializeField] with playtested starting values.
+    /// One persistent predator (redesign 2026-07-08 — replaces the key-gated Static/Watcher/Hunter tiers).
+    /// It hunts from the moment the run starts, but SOFT: an <b>aggression</b> value (0→1) ramps with time +
+    /// keys collected and modulates its speed, senses, and how easily it gives up — soft early (you learn the
+    /// map), relentless late.
+    ///
+    /// Senses (fair, with clear counterplay):
+    ///   • <b>Sight</b> — sees you within an aggression-scaled range, walls block line-of-sight.
+    ///   • <b>Hearing</b> — while you MOVE you're heard within a radius even without line-of-sight; stand STILL
+    ///     and you're silent. Freezing + breaking line-of-sight is the reliable hide (works even mid-panic).
+    ///   • <b>Fear = volume knob</b> — insanity (your racing heartbeat) widens BOTH sight and hearing, so panic
+    ///     betrays you — but freezing still saves you, so there's no death spiral.
+    ///
+    /// Fair machinery kept: awareness hysteresis, breathing-room after a won QTE (it searches your last-known),
+    /// non-fatal catch recoil. Speed stays only a touch above the player → you win by juking, not out-running.
+    /// All tuning is [SerializeField]. Retire() dormants it for the scare-free final section (GDD).
     /// </summary>
     [RequireComponent(typeof(NavMeshAgent))]
     public class MonsterAI : MonoBehaviour
     {
-        [Header("Tier (key-gated in game; set here for testing)")]
-        [SerializeField] private MonsterTier _startTier = MonsterTier.Hunter;
-        [SerializeField] private bool _debugHotkeys = true; // 1/2/3 switch tier, Q simulates a won QTE
+        [Header("Start (dormant until the run begins; set per test)")]
+        [SerializeField] private MonsterTier _startTier = MonsterTier.Static;
+        [SerializeField] private bool _debugHotkeys = true; // 1 = retire (dormant), 3 = activate, Q = won-QTE
 
         [Header("References")]
         [SerializeField] private Transform _player;
         [SerializeField] private float _eyeHeight = 1.5f;
         [SerializeField] private float _playerHeadHeight = 1.4f;
 
-        [Header("Hunter (architecture.md tuning)")]
-        [SerializeField] private float _chaseSpeed = 2.6f;   // a touch above the player
-        [SerializeField] private float _stalkSpeed = 0.9f;   // slow creep to last-known
-        [SerializeField] private float _sightRange = 10f;    // calm detection radius
-        [SerializeField] private float _loseRange = 20f;     // hysteresis: only drops beyond this
-        [SerializeField] private float _sightInsanityBonus = 6f; // effective sight = sight + insanity*bonus
-        [SerializeField] private float _winSearchSeconds = 4f;   // breathing room after a won QTE
+        [Header("Aggression ramp (0 soft → 1 relentless)")]
+        [SerializeField] private float _startAggression = 0.2f;  // how threatening it is the moment the run starts
+        [SerializeField] private float _keyAggression = 0.25f;   // + per key collected beyond the first
+        [SerializeField] private float _timeAggression = 0.004f; // + per second active (~+0.24 over 60 s)
 
-        [Header("Watcher (architecture.md tuning)")]
-        [SerializeField] private float _watcherInterval = 4f;
-        [SerializeField] private float _watcherMinDistance = 4f; // never inside QTE range
-        [SerializeField] private float _watcherMaxDistance = 9f;
+        [Header("Speed (lerped by aggression) — a touch above the player, escape by juking")]
+        [SerializeField] private float _chaseSpeedMin = 2.2f;
+        [SerializeField] private float _chaseSpeedMax = 2.9f;
+        [SerializeField] private float _stalkSpeed = 0.9f;       // creep to last-known when it loses you
 
-        [Header("Fear (InsanitySystem wires this later)")]
+        [Header("Sight (walls block line-of-sight)")]
+        [SerializeField] private float _sightRangeMin = 7f;      // low aggression
+        [SerializeField] private float _sightRangeMax = 10f;     // high aggression
+        [SerializeField] private float _loseRange = 20f;         // hysteresis: only drops beyond this
+        [SerializeField] private float _sightInsanityBonus = 6f; // fear widens sight
+
+        [Header("Hearing (moving = heard w/o line-of-sight; still = silent)")]
+        [SerializeField] private float _hearRadiusMin = 4f;      // low aggression
+        [SerializeField] private float _hearRadiusMax = 8f;      // high aggression
+        [SerializeField] private float _hearInsanityBonus = 4f;  // fear sharpens hearing too
+        [SerializeField] private float _playerMoveThreshold = 0.4f; // m/s to count as "making noise"
+
+        [Header("Give-up / breathing room")]
+        [SerializeField] private float _searchMin = 2f;          // low aggression gives up fast
+        [SerializeField] private float _searchMax = 6f;          // high aggression searches long
+        [SerializeField] private float _winSearchSeconds = 4f;   // forced breathing room after a won QTE
+
+        [Header("Fear (InsanitySystem feeds this)")]
         [SerializeField, Range(0f, 1f)] private float _insanity = 0f;
 
         private NavMeshAgent _agent;
@@ -49,15 +73,23 @@ namespace ProjectS
         private bool _aware;
         private Vector3 _lastKnownPos;
         private float _searchTimer;
-        private float _watcherTimer;
         private float _stunTimer;
         private bool _frozen;
+
+        private int _keyCount = 1;
+        private float _runTime;         // seconds active — feeds the aggression ramp
+        private Vector3 _lastPlayerPos;
+        private float _playerSpeed;     // m/s, horizontal — how much noise the player is making
 
         public MonsterTier Tier => _tier;
         public bool IsAware => _aware;
 
-        /// <summary>Stunned or frozen — the encounter QTE must not (re)trigger while true, so a catch
-        /// recoil/stun gives a real escape window even if the shove couldn't move it far in tight space.</summary>
+        /// <summary>Aggression 0→1 (start + keys + time). Drives speed, senses, and give-up.</summary>
+        public float Aggression =>
+            Mathf.Clamp01(_startAggression + _keyAggression * Mathf.Max(0, _keyCount - 1) + _timeAggression * _runTime);
+
+        /// <summary>Stunned or frozen — the QTE must not (re)trigger while true, so a catch recoil/stun gives a
+        /// real escape window even if the shove couldn't move it far in tight space.</summary>
         public bool IsBusy => _frozen || _stunTimer > 0f;
 
         /// <summary>Hold the monster in place (e.g. while a QTE overlay is open). Clear on resolve.</summary>
@@ -99,10 +131,10 @@ namespace ProjectS
                 var p = GameObject.FindGameObjectWithTag("Player");
                 if (p != null) _player = p.transform;
             }
+            if (_player != null) _lastPlayerPos = _player.position;
 
-            // The encounter is the QTE, not a body-block. Stop the monster capsule from physically jamming
-            // the player's CharacterController (an overlapping solid capsule freezes movement while look
-            // still works). Works regardless of the collider's trigger flag — no scene regen needed.
+            // The encounter is the QTE, not a body-block. Stop the monster capsule from physically jamming the
+            // player's CharacterController (an overlapping solid capsule freezes movement while look still works).
             if (_player != null)
             {
                 var monsterCol = GetComponent<Collider>();
@@ -114,7 +146,7 @@ namespace ProjectS
 
         private void Start() => SetTier(_startTier);
 
-        /// <summary>InsanitySystem feeds current fear here; it widens sight + quickens the Watcher.</summary>
+        /// <summary>InsanitySystem feeds current fear here — it widens both sight and hearing.</summary>
         public void SetInsanity(float value) => _insanity = Mathf.Clamp01(value);
 
         /// <summary>Instantly relocate the agent (used by scripted scares).</summary>
@@ -130,40 +162,43 @@ namespace ProjectS
             if (dir.sqrMagnitude > 1e-4f) transform.rotation = Quaternion.LookRotation(dir.normalized);
         }
 
-        /// <summary>Key count drives the tier: 0-1 → Static, 2 → Watcher, 3+ → Hunter.</summary>
+        /// <summary>Called at run start (held keys) and on each pickup. Activates the predator (soft) and bumps
+        /// aggression per key. Redesign: no more Static→Watcher→Hunter switching — one predator that ramps.</summary>
         public void OnKeyCollected(int keyCount)
         {
-            if (keyCount >= 3) SetTier(MonsterTier.Hunter);
-            else if (keyCount >= 2) SetTier(MonsterTier.Watcher);
-            else SetTier(MonsterTier.Static);
+            _keyCount = keyCount;
+            if (keyCount >= 1 && _tier != MonsterTier.Hunter) Activate();
         }
+
+        private void Activate()
+        {
+            _runTime = 0f;              // aggression starts ramping from run start
+            SetTier(MonsterTier.Hunter);
+        }
+
+        /// <summary>Retire the monster for the scare-free final section (GDD): it goes dormant.</summary>
+        public void Retire() => SetTier(MonsterTier.Static);
 
         public void SetTier(MonsterTier tier)
         {
             _tier = tier;
             if (_agent == null || !_agent.isOnNavMesh) return;
 
-            switch (tier)
+            if (tier == MonsterTier.Hunter)
             {
-                case MonsterTier.Static:
-                    _agent.isStopped = true;
-                    _agent.ResetPath();
-                    break;
-                case MonsterTier.Watcher:
-                    _agent.isStopped = false;
-                    _watcherTimer = 0f; // teleport on the next tick
-                    break;
-                case MonsterTier.Hunter:
-                    _agent.isStopped = false;
-                    _aware = false;
-                    // Start by hunting toward where the player is now (search), not standing still —
-                    // it locks on once you're within sight + line-of-sight.
-                    _lastKnownPos = _player != null ? _player.position : transform.position;
-                    break;
+                _agent.isStopped = false;
+                _aware = false;
+                // Start by creeping toward where the player is now; it locks on once you're within sight/hearing.
+                _lastKnownPos = _player != null ? _player.position : transform.position;
+            }
+            else // Static / dormant
+            {
+                _agent.isStopped = true;
+                _agent.ResetPath();
             }
         }
 
-        /// <summary>Breathing-room hook: after a won QTE, force the monster to lose you and search.</summary>
+        /// <summary>Breathing-room hook: after a won QTE, force the monster to lose you and search last-known.</summary>
         public void OnQteWon()
         {
             _aware = false;
@@ -176,7 +211,12 @@ namespace ProjectS
             if (_debugHotkeys) HandleDebugHotkeys();
             if (_player == null || _agent == null || !_agent.isOnNavMesh) return;
 
-            // Frozen (QTE open) or stunned (post-QTE) → hold still.
+            // Track how fast the player is moving (their noise) — kept fresh even while frozen so unfreezing
+            // doesn't spike a huge delta.
+            Vector3 flat = _player.position - _lastPlayerPos; flat.y = 0f;
+            _playerSpeed = flat.magnitude / Mathf.Max(Time.deltaTime, 1e-4f);
+            _lastPlayerPos = _player.position;
+
             if (_frozen) { _agent.isStopped = true; return; }
             if (_stunTimer > 0f)
             {
@@ -184,77 +224,51 @@ namespace ProjectS
                 _agent.isStopped = true;
                 return;
             }
-            if (_tier != MonsterTier.Static) _agent.isStopped = false;
 
-            switch (_tier)
+            if (_tier == MonsterTier.Hunter)
             {
-                case MonsterTier.Static: break;
-                case MonsterTier.Watcher: TickWatcher(); break;
-                case MonsterTier.Hunter: TickHunter(); break;
+                _agent.isStopped = false;
+                _runTime += Time.deltaTime;
+                TickPredator();
             }
         }
 
-        private void TickHunter()
+        private void TickPredator()
         {
+            float aggro = Aggression;
             float dist = Vector3.Distance(transform.position, _player.position);
-            float effectiveSight = _sightRange + _insanity * _sightInsanityBonus;
-            bool los = HasLineOfSight();
 
-            // Awareness hysteresis: gain within sight + LOS, drop only beyond loseRange (or LOS lost & far).
+            float effSight = Mathf.Lerp(_sightRangeMin, _sightRangeMax, aggro) + _insanity * _sightInsanityBonus;
+            float hearR = Mathf.Lerp(_hearRadiusMin, _hearRadiusMax, aggro) + _insanity * _hearInsanityBonus;
+
+            bool los = HasLineOfSight();
+            bool sees = dist <= effSight && los;
+            bool hears = _playerSpeed > _playerMoveThreshold && dist <= hearR; // still = silent = safe
+
+            // Awareness: gain if it sees OR hears you; drop when it can do NEITHER (freeze + break LOS to hide),
+            // or you're simply beyond loseRange.
             if (!_aware)
             {
-                if (dist <= effectiveSight && los)
-                {
-                    _aware = true;
-                    _searchTimer = 0f;
-                }
+                if (sees || hears) { _aware = true; _searchTimer = 0f; }
             }
-            else if (dist > _loseRange || (!los && dist > effectiveSight))
+            else if (dist > _loseRange || (!sees && !hears))
             {
                 _aware = false;
                 _lastKnownPos = _player.position;
-                _searchTimer = _winSearchSeconds;
+                _searchTimer = Mathf.Lerp(_searchMin, _searchMax, aggro); // soft gives up fast
             }
 
             if (_aware)
             {
-                _agent.speed = _chaseSpeed;
+                _agent.speed = Mathf.Lerp(_chaseSpeedMin, _chaseSpeedMax, aggro);
                 _lastKnownPos = _player.position;
                 _agent.SetDestination(_player.position);
             }
             else
             {
-                // Lost you: creep to your last-known spot and search there.
                 _agent.speed = _stalkSpeed;
                 if (_searchTimer > 0f) _searchTimer -= Time.deltaTime;
                 _agent.SetDestination(_lastKnownPos);
-            }
-        }
-
-        private void TickWatcher()
-        {
-            _watcherTimer -= Time.deltaTime;
-            if (_watcherTimer > 0f) return;
-
-            // Higher insanity → teleports more often (architecture.md).
-            _watcherTimer = _watcherInterval * (1f - 0.5f * _insanity);
-            TeleportAroundPlayer();
-        }
-
-        private void TeleportAroundPlayer()
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                float angle = Random.Range(0f, Mathf.PI * 2f);
-                float d = Random.Range(_watcherMinDistance, _watcherMaxDistance);
-                Vector3 candidate = _player.position + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * d;
-
-                if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 2f, NavMesh.AllAreas) &&
-                    Vector3.Distance(hit.position, _player.position) >= _watcherMinDistance)
-                {
-                    _agent.Warp(hit.position);
-                    return;
-                }
             }
         }
 
@@ -273,17 +287,18 @@ namespace ProjectS
         {
             var kb = Keyboard.current;
             if (kb == null) return;
-            if (kb.digit1Key.wasPressedThisFrame) SetTier(MonsterTier.Static);
-            if (kb.digit2Key.wasPressedThisFrame) SetTier(MonsterTier.Watcher);
-            if (kb.digit3Key.wasPressedThisFrame) SetTier(MonsterTier.Hunter);
-            if (kb.qKey.wasPressedThisFrame) OnQteWon(); // feel the breathing room
+            if (kb.digit1Key.wasPressedThisFrame) Retire();               // dormant
+            if (kb.digit3Key.wasPressedThisFrame) OnKeyCollected(3);      // activate + high aggression
+            if (kb.qKey.wasPressedThisFrame) OnQteWon();                  // feel the breathing room
         }
 
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = _aware ? Color.red : Color.yellow;
-            Gizmos.DrawWireSphere(transform.position, _sightRange);
-            Gizmos.color = new Color(1f, 0.5f, 0f, 0.4f);
+            Gizmos.DrawWireSphere(transform.position, _sightRangeMax);
+            Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.5f); // hearing
+            Gizmos.DrawWireSphere(transform.position, _hearRadiusMax);
+            Gizmos.color = new Color(1f, 0.5f, 0f, 0.3f);   // lose range
             Gizmos.DrawWireSphere(transform.position, _loseRange);
         }
     }
