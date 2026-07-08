@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.EnhancedTouch;
+using ETouch = UnityEngine.InputSystem.EnhancedTouch.Touch;
 
 namespace ProjectS
 {
@@ -25,6 +27,10 @@ namespace ProjectS
         [SerializeField] private float _pitchMax = 80f;
         [SerializeField] private bool _lockCursor = true;
 
+        [Header("Touch (device) — left half = move joystick, right half = look drag")]
+        [SerializeField] private float _joystickRadius = 140f;        // px drag for full-speed move
+        [SerializeField] private float _touchLookSensitivity = 0.12f; // degrees per px dragged
+
         [Header("Camera + FOV ladder (driven later by the catch system)")]
         [SerializeField] private Camera _camera;
         [SerializeField] private float _baseFov = 60f;
@@ -48,6 +54,8 @@ namespace ProjectS
         private float _verticalVelocity;
         private int _catchCount;
         private bool _inputEnabled = true;
+        private Vector2 _touchMove; // from the left-half joystick (0..1 magnitude)
+        private Vector2 _touchLook; // this frame's right-half drag delta (px)
 
         // How much control the player currently has (drops with catches): 0->1, 1->0.6, 2+->0.45.
         public float ControlFactor => _controlFactor;
@@ -96,6 +104,7 @@ namespace ProjectS
         {
             _moveAction.Enable();
             _lookAction.Enable();
+            EnhancedTouchSupport.Enable(); // touch reading on device (harmless/idle on desktop)
             if (_lockCursor) Cursor.lockState = CursorLockMode.Locked;
         }
 
@@ -103,6 +112,7 @@ namespace ProjectS
         {
             _moveAction.Disable();
             _lookAction.Disable();
+            EnhancedTouchSupport.Disable();
             if (_lockCursor) Cursor.lockState = CursorLockMode.None;
         }
 
@@ -110,17 +120,37 @@ namespace ProjectS
         {
             if (_inputEnabled)
             {
+                ReadTouch(); // fills _touchMove + _touchLook for this frame
                 Look();
                 Move();
             }
+            else { _touchMove = Vector2.zero; _touchLook = Vector2.zero; }
             UpdateFov();
+        }
+
+        // Left half of the screen = a floating move joystick; right half = a look drag. Multi-touch, so one
+        // finger can walk while another looks. Desktop has no active touches → both stay zero (WASD/mouse win).
+        private void ReadTouch()
+        {
+            _touchMove = Vector2.zero;
+            _touchLook = Vector2.zero;
+            if (!EnhancedTouchSupport.enabled) return;
+
+            float half = Screen.width * 0.5f;
+            foreach (var t in ETouch.activeTouches)
+            {
+                if (t.startScreenPosition.x < half) // left → move
+                    _touchMove = Vector2.ClampMagnitude((t.screenPosition - t.startScreenPosition) / _joystickRadius, 1f);
+                else                                 // right → look (accumulate this frame's drag)
+                    _touchLook += t.delta;
+            }
         }
 
         private void Look()
         {
             Vector2 delta = _lookAction.ReadValue<Vector2>();
-            _yaw += delta.x * _lookSensitivity;
-            _pitch -= delta.y * _lookSensitivity;
+            _yaw += delta.x * _lookSensitivity + _touchLook.x * _touchLookSensitivity;
+            _pitch -= delta.y * _lookSensitivity + _touchLook.y * _touchLookSensitivity;
             _pitch = Mathf.Clamp(_pitch, _pitchMin, _pitchMax);
 
             // Yaw turns the body; pitch tilts only the camera.
@@ -131,7 +161,7 @@ namespace ProjectS
 
         private void Move()
         {
-            Vector2 input = _moveAction.ReadValue<Vector2>();
+            Vector2 input = Vector2.ClampMagnitude(_moveAction.ReadValue<Vector2>() + _touchMove, 1f);
             Vector3 wish = transform.right * input.x + transform.forward * input.y;
             wish = Vector3.ClampMagnitude(wish, 1f) * (_moveSpeed * _controlFactor);
 

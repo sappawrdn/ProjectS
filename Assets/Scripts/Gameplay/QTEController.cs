@@ -78,8 +78,10 @@ namespace ProjectS
         {
             _needle = (_needle + (360f / _sweepSeconds) * Time.deltaTime) % 360f;
 
-            var kb = Keyboard.current;
-            if (kb == null || !kb.spaceKey.wasPressedThisFrame) return;
+            // Tap the screen (device) or press [Space] (editor). Player is frozen here, so a tap only hits the QTE.
+            bool tapped = (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
+                          || (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame);
+            if (!tapped) return;
 
             if (Mathf.Abs(Mathf.DeltaAngle(_needle, _greenCenter)) <= _greenZoneWidth * 0.5f) _hits++;
             else _fails++;
@@ -140,7 +142,7 @@ namespace ProjectS
             GUI.color = Color.white;
             var style = new GUIStyle(GUI.skin.label) { fontSize = 20, alignment = TextAnchor.MiddleCenter };
             GUI.Label(new Rect(0f, center.y + radius + 12f, w, 30f),
-                $"TAP [Space] in the GREEN!    Hits {_hits}/{_hitsToWin}    Fails {_fails}/{_failsToLose}", style);
+                $"TAP the screen in the GREEN!    Hits {_hits}/{_hitsToWin}    Fails {_fails}/{_failsToLose}", style);
         }
     }
 }

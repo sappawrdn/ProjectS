@@ -45,12 +45,15 @@ namespace ProjectS
 
         private void Update()
         {
+            // Keyboard for the editor, a screen tap for device (no keyboard there → don't early-return on null).
             var kb = Keyboard.current;
-            if (kb == null) return;
+            bool tap = Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame;
+            bool begin = tap || (kb != null && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame));
+            bool restart = tap || (kb != null && kb.rKey.wasPressedThisFrame);
 
-            if (State == RunState.MainMenu && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame))
+            if (State == RunState.MainMenu && begin)
                 BeginRun();
-            else if ((State == RunState.Won || State == RunState.Lost) && kb.rKey.wasPressedThisFrame)
+            else if ((State == RunState.Won || State == RunState.Lost) && restart)
                 SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // clean replay reset
         }
 
@@ -66,6 +69,8 @@ namespace ProjectS
             Freeze(false);
             _monster?.OnKeyCollected(KeyCount);                 // set the initial tier for keys held
             FindFirstObjectByType<ScareDirector>()?.OnRunStarted();
+            HapticManager.Instance?.ColdOpenPulse();            // a deep thump as you drop into the dark
+            HapticManager.Instance?.StartHeartbeat();           // the fear channel runs for the whole run
         }
 
         // Freeze/unfreeze the run actors for non-Playing states.
@@ -80,6 +85,7 @@ namespace ProjectS
             if (State != RunState.Playing) return;
             KeyCount++;
             _monster?.OnKeyCollected(KeyCount); // pickup escalates the monster
+            HapticManager.Instance?.Confirm();  // strong double thump = pickup landed
             Debug.Log($"[GameState] Key collected: {KeyCount}/{_keysRequired}");
         }
 
@@ -103,6 +109,7 @@ namespace ProjectS
         {
             State = RunState.Won;
             Freeze(true);
+            HapticManager.Instance?.StopHeartbeat();
             Debug.Log("[GameState] YOU ESCAPED.");
         }
 
@@ -110,6 +117,7 @@ namespace ProjectS
         {
             State = RunState.Lost;
             Freeze(true);
+            HapticManager.Instance?.StopHeartbeat();
             Debug.Log("[GameState] CAUGHT.");
         }
 
@@ -120,20 +128,23 @@ namespace ProjectS
             if (State == RunState.MainMenu)
             {
                 CenterText("PROJECT S", 64, Color.white, -40f);
-                CenterText("Press [Enter] to begin", 24, new Color(0.8f, 0.8f, 0.8f), 40f);
+                CenterText("Tap or press [Enter] to begin", 24, new Color(0.8f, 0.8f, 0.8f), 40f);
                 return;
             }
 
             // Playing: temporary dev readout (greybox only — near-zero HUD in the ship build).
             var style = new GUIStyle(GUI.skin.label) { fontSize = 18 };
-            GUI.Label(new Rect(12, 12, 500, 30),
+            // Respect the notch/safe area (landscape iPhone) so the text isn't clipped by the screen edge.
+            float x = Screen.safeArea.x + 12f;
+            float y = (Screen.height - Screen.safeArea.yMax) + 12f;
+            GUI.Label(new Rect(x, y, 500, 30),
                 $"Keys {KeyCount}/{_keysRequired}    Catches {CatchCount}/{_catchesToLose}    {State}", style);
 
             if (State == RunState.Won || State == RunState.Lost)
             {
                 CenterText(State == RunState.Won ? "YOU ESCAPED" : "CAUGHT", 56,
                     State == RunState.Won ? Color.green : Color.red, -40f);
-                CenterText("Press [R] to restart", 24, new Color(0.85f, 0.85f, 0.85f), 40f);
+                CenterText("Tap or press [R] to restart", 24, new Color(0.85f, 0.85f, 0.85f), 40f);
             }
         }
 

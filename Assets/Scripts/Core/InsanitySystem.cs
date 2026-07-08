@@ -93,6 +93,7 @@ namespace ProjectS
 
             UpdateInsanity();
             _monster?.SetInsanity(Insanity);
+            HapticManager.Instance?.SetInsanity(Insanity); // same fear value drives the on-device heartbeat
             UpdateVignette();
         }
 
@@ -134,7 +135,10 @@ namespace ProjectS
         {
             if (!_showDebug) return;
             var style = new GUIStyle(GUI.skin.label) { fontSize = 16 };
-            GUI.Label(new Rect(12, 40, 500, 24), $"Insanity {Insanity:0.00}    Heartbeat {HeartbeatBpm:0} BPM", style);
+            // Respect the notch/safe area (landscape iPhone) so the text isn't clipped by the screen edge.
+            float x = Screen.safeArea.x + 12f;
+            float y = (Screen.height - Screen.safeArea.yMax) + 44f; // below the GameState readout
+            GUI.Label(new Rect(x, y, 500, 24), $"Insanity {Insanity:0.00}    Heartbeat {HeartbeatBpm:0} BPM", style);
         }
     }
 }

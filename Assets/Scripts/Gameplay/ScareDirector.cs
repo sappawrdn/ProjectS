@@ -91,8 +91,8 @@ namespace ProjectS
             _monster.FaceInstant(_player.position);
 
             _insanity?.Spike(_jumpscareInsanity);
-            // TODO(device): fire the Core Haptics "jumpscare" slam + an audio sting here (via a HapticManager
-            // wrapper). Proven in HeartbeatHapticTest; not wired yet. Editor shows the visual + fear spike.
+            HapticManager.Instance?.Jumpscare(); // violent slam on device (no-op in editor)
+            // TODO(audio): add the jumpscare audio sting here once AudioDirector exists (Stage 2).
 
             yield return new WaitForSeconds(_jumpscareHold);
 
