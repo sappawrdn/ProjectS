@@ -62,6 +62,15 @@
   Skin references gitignored PSX art → **skinned scene NOT committed** (teammate re-runs Skin after getting art).
 - **Owner: skin "cukup aman"; brightness to tune later.** Abandoned earlier `CH4-Map1` (.blend/.usdz/FBX import
   detour) left as harmless dead menu (`Build CH4-Map1 Greybox Scene`) — clean up later.
+- **Level3 dressing menus** (adapted from the maze, non-grid): `Skin Level3 (PSX + ceiling)`,
+  `Clad Level3 Walls (WallTemplate)` (both faces; `WallPanelFlip = true`), `Dress Level3 — Doors` (DoorType1
+  slabs, ~1/5 m, skips perimeter), `Scatter Hospital Props (Level3)` (navmesh-sampled, wall-clearance ≥1.5 m).
+  All read the live `H_`/`V_` walls so they respect manual edits; decorative (greybox keeps collision/navmesh).
+- **PSXBackrooms un-gitignored + COMMITTED** (7.5 MB, `.meta` kept for stable GUIDs; only `Blender/` source
+  `.blend` excluded). Owner SAVED the dressed `Level3.unity` (~38 MB) and it's committed too → teammate gets the
+  **fully-dressed level 1:1 with just `git pull` + open** (no art download, no menu-running). `SETUP.md` (root)
+  is the teammate guide. Note: `SampleScene` (maze dressing) still uncommitted — could now be committed too since
+  the PSX art is in git, but left for later (owner focused on Level3).
 - **Next:** hospital props + doors + EXIT-signs for Level3 (the maze dressing menus are maze-grid-coupled →
   need a Level3-adapted version, wall/ceiling placement without a grid), then lighting tune, then device pass
   (HapticManager/AudioDirector wiring the proven Core Haptics + PHASE).

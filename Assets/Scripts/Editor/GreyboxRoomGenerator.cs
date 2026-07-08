@@ -408,6 +408,273 @@ namespace ProjectS.EditorTools
         private static Vector3 Ch4ImgToWorld(float nx, float ny, float depth) =>
             new Vector3(nx * Ch4WorldWidth, 0f, (1f - ny) * depth);
 
+        // Skin Level3 with the PSX backrooms textures + a ceiling slab + dark-red mood, matched to the maze skin.
+        // Walls share ONE material but get per-renderer tiling (via MaterialPropertyBlock) so a 20 m wall and a
+        // 2 m wall keep the same texel density instead of stretching. Runtime materials (no CreateAsset) to dodge
+        // the serialization timing that once left a material magenta. Re-runnable (rebuilds ceiling + lights).
+        private const float Ch4TileMeters = 2.5f;   // texture repeats every ~2.5 m on walls
+        private const float Ch4LightSpacing = 11f;  // ceiling point-light grid spacing (m)
+
+        [MenuItem("ProjectS/Skin Level3 (PSX + ceiling)")]
+        public static void SkinLevel3()
+        {
+            var level = GameObject.Find("Level3");
+            if (level == null) { Debug.LogWarning("[Skin3] No 'Level3' — open Level3.unity or run 'Build Level3' first."); return; }
+
+            var wallMat  = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/TileTextureBase.png", "PSX3_Wall", Vector2.one);
+            var floorMat = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/FloorTile1.png", "PSX3_Floor", new Vector2(10f, 13f));
+            var ceilMat  = MakeTexturedMaterial("Assets/PSXBackrooms/Textures/Ceiling1.png", "PSX3_Ceiling", new Vector2(10f, 13f));
+            if (wallMat == null || floorMat == null || ceilMat == null) return;
+
+            // Walls (per-wall tiling) + floor.
+            int walls = 0;
+            foreach (Transform child in level.transform)
+            {
+                var r = child.GetComponent<Renderer>();
+                if (r == null) continue;
+                if (child.name == "Floor") { r.sharedMaterial = floorMat; }
+                else if (child.name.StartsWith("V_") || child.name.StartsWith("H_"))
+                {
+                    r.sharedMaterial = wallMat;
+                    Vector3 sc = child.localScale;
+                    float length = Mathf.Max(sc.x, sc.z);              // along-wall span (thickness is the small one)
+                    var mpb = new MaterialPropertyBlock();
+                    r.GetPropertyBlock(mpb);
+                    mpb.SetVector("_BaseMap_ST", new Vector4(length / Ch4TileMeters, sc.y / Ch4TileMeters, 0f, 0f));
+                    r.SetPropertyBlock(mpb);
+                    walls++;
+                }
+            }
+
+            float depth = Ch4WorldWidth * Ch4AspectHW;
+
+            // Ceiling slab over the whole footprint (rebuild fresh so a stale one can't linger).
+            var oldCeil = level.transform.Find("Ceiling");
+            if (oldCeil != null) Object.DestroyImmediate(oldCeil.gameObject);
+            var ceiling = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            ceiling.name = "Ceiling";
+            ceiling.transform.SetParent(level.transform);
+            ceiling.transform.position = new Vector3(Ch4WorldWidth / 2f, Ch4WallHeight + 0.05f, depth / 2f);
+            ceiling.transform.localScale = new Vector3(Ch4WorldWidth, 0.1f, depth);
+            ceiling.GetComponent<Renderer>().sharedMaterial = ceilMat;
+
+            // Ceiling point-lights on a grid (basic light + future light-death targets). Red-tinted for the mood.
+            var oldLights = level.transform.Find("CeilingLights");
+            if (oldLights != null) Object.DestroyImmediate(oldLights.gameObject);
+            var lightsRoot = new GameObject("CeilingLights");
+            Undo.RegisterCreatedObjectUndo(lightsRoot, "Skin Level3");
+            lightsRoot.transform.SetParent(level.transform);
+            int lit = 0;
+            for (float x = Ch4LightSpacing / 2f; x < Ch4WorldWidth; x += Ch4LightSpacing)
+                for (float z = Ch4LightSpacing / 2f; z < depth; z += Ch4LightSpacing)
+                {
+                    var go = new GameObject("CeilingLight");
+                    go.transform.SetParent(lightsRoot.transform);
+                    go.transform.position = new Vector3(x, Ch4WallHeight - 0.2f, z);
+                    var lg = go.AddComponent<Light>();
+                    lg.type = LightType.Point;
+                    lg.range = 12f;
+                    lg.intensity = 3f;
+                    lg.color = new Color(1f, 0.3f, 0.26f); // hospital red
+                    lit++;
+                }
+
+            // Dim sun + dark-red ambient (flashlight leads). Reuse the maze mood for sun/ambient.
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.06f, 0.025f, 0.025f);
+            var sun = GameObject.Find("Directional Light");
+            if (sun != null && sun.TryGetComponent(out Light sunLight))
+            {
+                sunLight.intensity = 0.08f;
+                sunLight.color = new Color(1f, 0.55f, 0.5f);
+            }
+
+            Debug.Log($"[Skin3] Skinned {walls} walls + floor + ceiling, {lit} red ceiling lights, dark-red mood. " +
+                      "Too dark/bright? Tell me — tweak light intensity / spacing / sun.");
+        }
+
+        // Scatter hospital furniture across Level3. No grid here, so placement samples the NAVMESH (guaranteed
+        // open floor) and only keeps points with enough clearance to a wall (so props sit in the wider corridors/
+        // rooms without clipping walls or plugging a narrow choke). Avoids gameplay-critical spots (spawn/keys/
+        // exit/monster) + spaces props out. Props are decorative (no colliders) so no navmesh rebake is needed.
+        // Bounds-normalized + floor-snapped so any FBX import scale ends up sensible. Re-run to reshuffle.
+        private const int Ch4PropTarget = 24;         // how many props to place
+        private const float Ch4PropMinWallDist = 1.5f; // min clearance to a wall (m) → skips narrow chokes
+        private const float Ch4PropSpacing = 3f;       // min distance between props / from critical points (m)
+
+        [MenuItem("ProjectS/Scatter Hospital Props (Level3)")]
+        public static void ScatterHospitalPropsLevel3()
+        {
+            var level = GameObject.Find("Level3");
+            if (level == null) { Debug.LogWarning("[Props3] No 'Level3' — open Level3.unity first."); return; }
+
+            var prefabs = new List<GameObject>();
+            foreach (var n in new[] { "HospitalBed", "HospitalChair", "HospitalTray" })
+            {
+                var p = LoadPsxModel(n);
+                if (p != null) prefabs.Add(p);
+            }
+            if (prefabs.Count == 0) { Debug.LogWarning("[Props3] No hospital FBX in Assets/PSXBackrooms/Models/."); return; }
+
+            var existing = level.transform.Find("Props");
+            if (existing != null) Object.DestroyImmediate(existing.gameObject);
+            var propsRoot = new GameObject("Props");
+            Undo.RegisterCreatedObjectUndo(propsRoot, "Scatter Hospital Props (Level3)");
+            propsRoot.transform.SetParent(level.transform);
+
+            // Keep clear of gameplay-critical objects.
+            var avoid = new List<Vector3>();
+            foreach (var nm in new[] { "Player", "Monster", "Exit", "Key_1", "Key_2", "Key_3" })
+            {
+                var go = GameObject.Find(nm);
+                if (go != null) avoid.Add(go.transform.position);
+            }
+
+            float depth = Ch4WorldWidth * Ch4AspectHW;
+            int placed = 0, guard = 0;
+            while (placed < Ch4PropTarget && guard++ < 1000)
+            {
+                var probe = new Vector3(Random.Range(2f, Ch4WorldWidth - 2f), 1f, Random.Range(2f, depth - 2f));
+                if (!NavMesh.SamplePosition(probe, out NavMeshHit hit, 3f, NavMesh.AllAreas)) continue;
+                Vector3 pos = hit.position;
+
+                // Only place where there's room (skips narrow corridors so nothing clips a wall / blocks a choke).
+                if (NavMesh.FindClosestEdge(pos, out NavMeshHit edge, NavMesh.AllAreas) && edge.distance < Ch4PropMinWallDist) continue;
+                if (avoid.Exists(a => (a - pos).sqrMagnitude < Ch4PropSpacing * Ch4PropSpacing)) continue;
+
+                var prefab = prefabs[Random.Range(0, prefabs.Count)];
+                var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, propsRoot.transform);
+                Undo.RegisterCreatedObjectUndo(inst, "Scatter Hospital Props (Level3)");
+                inst.transform.position = pos;
+                inst.transform.rotation = Quaternion.Euler(0f, Random.Range(0, 4) * 90f, 0f);
+                NormalizeAndFloor(inst, TargetSize(prefab.name));
+                avoid.Add(pos);
+                placed++;
+            }
+
+            Debug.Log($"[Props3] Placed {placed}/{Ch4PropTarget} hospital props (navmesh-sampled, wall-clearance ≥ " +
+                      $"{Ch4PropMinWallDist} m, floor-snapped). Too many/few or too clustered? Tweak Ch4PropTarget / " +
+                      "Ch4PropMinWallDist / Ch4PropSpacing. Want them lining the walls instead of free-standing? Tell me.");
+        }
+
+        // ===================== Level3 doors + WallTemplate cladding =====================
+        // Same treatment the maze got, adapted to Level3's variable-length walls (no grid). Both read the actual
+        // H_/V_ wall children (so they respect any manual wall edits) and stay decorative — the greybox walls keep
+        // collision + navmesh, these just add the look.
+
+        // Collect the current walls as (world position, runs-along-Z?, span length).
+        private static List<(Vector3 pos, bool vertical, float length)> Ch4CollectWalls(GameObject level)
+        {
+            var walls = new List<(Vector3, bool, float)>();
+            foreach (Transform c in level.transform)
+            {
+                if (c.name.StartsWith("V_")) walls.Add((c.position, true, c.localScale.z));   // runs along Z, normal ±X
+                else if (c.name.StartsWith("H_")) walls.Add((c.position, false, c.localScale.x)); // runs along X, normal ±Z
+            }
+            return walls;
+        }
+
+        private const float Ch4DoorEveryMeters = 5f;      // ~1 door per this many metres of wall
+        private const int Ch4DoorMaxPerWall = 3;
+        private const float Ch4DoorSkipWallLongerThan = 45f; // skip the perimeter walls (doors would face outside)
+
+        [MenuItem("ProjectS/Dress Level3 — Doors")]
+        public static void DressLevel3Doors()
+        {
+            var level = GameObject.Find("Level3");
+            if (level == null) { Debug.LogWarning("[Doors3] No 'Level3' — open Level3.unity first."); return; }
+
+            var doors = new List<GameObject>();
+            foreach (var n in new[] { "DoorType1V1", "DoorType1V2" }) // solid slabs only (DoorType2 has a see-through window)
+            {
+                var d = LoadPsxModel(n);
+                if (d != null) doors.Add(d);
+            }
+            if (doors.Count == 0) { Debug.LogWarning("[Doors3] No DoorType1 FBX in Assets/PSXBackrooms/Models/ (run Fix PSX Model Scale first too)."); return; }
+
+            var old = level.transform.Find("Doors");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            var root = new GameObject("Doors");
+            Undo.RegisterCreatedObjectUndo(root, "Dress Level3 Doors");
+            root.transform.SetParent(level.transform);
+
+            int placed = 0;
+            foreach (var w in Ch4CollectWalls(level))
+            {
+                if (w.length > Ch4DoorSkipWallLongerThan) continue; // perimeter → skip
+                int n = Mathf.Clamp(Mathf.RoundToInt(w.length / Ch4DoorEveryMeters), 0, Ch4DoorMaxPerWall);
+                Vector3 along = w.vertical ? Vector3.forward : Vector3.right;
+                for (int i = 0; i < n; i++)
+                {
+                    float t = ((i + 0.5f) / n - 0.5f) * w.length;
+                    PlaceDoor(doors[Random.Range(0, doors.Count)], root.transform, w.pos + along * t, w.vertical);
+                    placed++;
+                }
+            }
+            Debug.Log($"[Doors3] Placed {placed} doors on Level3 walls. Facing wrong way? DoorYawOffset. Too dense/sparse? " +
+                      "Tweak Ch4DoorEveryMeters / Ch4DoorMaxPerWall.");
+        }
+
+        [MenuItem("ProjectS/Clad Level3 Walls (WallTemplate)")]
+        public static void CladLevel3Walls()
+        {
+            var level = GameObject.Find("Level3");
+            if (level == null) { Debug.LogWarning("[Clad3] No 'Level3' — open Level3.unity first."); return; }
+
+            var panel = LoadPsxModel("WallTemplate2"); // flat panel (WallTemplate1 is a corner piece)
+            if (panel == null) { Debug.LogWarning("[Clad3] WallTemplate2 not found in Assets/PSXBackrooms/Models/."); return; }
+
+            // Measure the panel once (native, unrotated) → axis roles + native size for the tiling maths.
+            var probe = (GameObject)PrefabUtility.InstantiatePrefab(panel);
+            probe.transform.rotation = Quaternion.identity;
+            probe.transform.localScale = Vector3.one;
+            probe.transform.position = Vector3.zero;
+            bool measured = TryWorldBounds(probe, out Bounds pb);
+            Vector3 sz = measured ? pb.size : Vector3.one;
+            Object.DestroyImmediate(probe);
+            if (!measured) return;
+
+            int tall = LargestAxis(sz), thin = SmallestAxis(sz), mid = 3 - tall - thin;
+            if (tall == thin) return;
+            Quaternion srcRot = Quaternion.LookRotation(AxisVec(thin), AxisVec(tall));
+
+            var old = level.transform.Find("WallCladding");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            var clad = new GameObject("WallCladding");
+            Undo.RegisterCreatedObjectUndo(clad, "Clad Level3 Walls");
+            clad.transform.SetParent(level.transform);
+
+            int placed = 0;
+            foreach (var w in Ch4CollectWalls(level))
+            {
+                int count = Mathf.Max(1, Mathf.RoundToInt(w.length / Mathf.Max(0.1f, sz[mid]))); // panels along this wall
+                Vector3 localScale = Vector3.one;
+                localScale[tall] = Ch4WallHeight / Mathf.Max(1e-4f, sz[tall]);       // height → wall height
+                localScale[mid] = w.length / (count * Mathf.Max(1e-4f, sz[mid]));    // width → fill the span evenly
+
+                Vector3 normal = w.vertical ? Vector3.right : Vector3.forward;
+                Vector3 along = w.vertical ? Vector3.forward : Vector3.right;
+                foreach (var face in new[] { normal, -normal }) // clad BOTH faces (walls are seen from either side)
+                {
+                    Vector3 facing = WallPanelFlip ? -face : face;
+                    Quaternion rot = Quaternion.LookRotation(facing, Vector3.up) * Quaternion.Inverse(srcRot);
+                    for (int i = 0; i < count; i++)
+                    {
+                        float t = ((i + 0.5f) / count - 0.5f) * w.length;
+                        var inst = (GameObject)PrefabUtility.InstantiatePrefab(panel, clad.transform);
+                        Undo.RegisterCreatedObjectUndo(inst, "Clad Level3 Walls");
+                        inst.transform.localScale = localScale;
+                        inst.transform.rotation = rot;
+                        inst.transform.position = w.pos + face * (Ch4WallThick / 2f + 0.02f) + along * t;
+                        if (TryWorldBounds(inst, out Bounds b)) inst.transform.position += Vector3.up * (0f - b.min.y);
+                        placed++;
+                    }
+                }
+            }
+            Debug.Log($"[Clad3] {placed} WallTemplate2 panels tiled over Level3 walls (both faces). Facing into the wall? " +
+                      "Set WallPanelFlip = true. Check from INSIDE a corridor.");
+        }
+
         private static GameObject BuildMaze()
         {
             var root = new GameObject("Maze");
@@ -841,7 +1108,7 @@ namespace ProjectS.EditorTools
         // One WallTemplate per wall face, scaled to cover the greybox wall (5m × 3m). Greybox stays for
         // collision + navmesh; the panel is just the look. Run 'Fix PSX Model Scale' first isn't required here
         // (we scale to fit regardless).
-        private const bool WallPanelFlip = false; // set true if panels face into the wall instead of the corridor
+        private const bool WallPanelFlip = true; // set true if panels face into the wall instead of the corridor
 
         [MenuItem("ProjectS/Clad Walls (WallTemplate)")]
         public static void CladWalls()

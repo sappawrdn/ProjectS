@@ -110,9 +110,13 @@ Thumbs.db
 /Assets/Samples.meta
 
 # ==============================================================
-# Temporary imported art packs (being trialled; too big to commit — final art gets its own decision).
+# Trial art. Loafbrr was dropped (owner disliked it) — stays ignored.
 # ==============================================================
 /Assets/LoafbrrAssets/
 /Assets/LoafbrrAssets.meta
-/Assets/PSXBackrooms/
-/Assets/PSXBackrooms.meta
+
+# PSXBackrooms is now the chosen art → COMMITTED (7.5 MB, with .meta for stable GUIDs) so teammates get the
+# dressed level 1:1. Only the heavy Blender source files stay out (Unity doesn't need them; they'd force a
+# Blender install to import).
+/Assets/PSXBackrooms/Blender/
+/Assets/PSXBackrooms/Blender.meta
