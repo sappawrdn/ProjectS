@@ -1,25 +1,22 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.InputSystem;
 
 namespace ProjectS
 {
     /// <summary>
-    /// Scripted one-shot scares (architecture.md).
-    ///   Event B — False Catch (early, ~5s, reliable): the monster lunges right in front of you + a fear
-    ///     spike (+ a haptic slam on device), held briefly, then it vanishes. It spikes fear WITHOUT
-    ///     advancing the catch counter, and must NOT trigger the QTE (it freezes the monster, which the QTE
-    ///     treats as busy, so no encounter fires during the fake).
-    ///   Event C — The Reveal (mid): a jumpscare on crossing into the next section. Needs section geometry
-    ///     (a must-cross trigger), so it's stubbed here until real levels exist — call TriggerReveal() from
-    ///     a section-entry trigger.
+    /// Scripted one-shot scares (architecture.md), reworked 2026-07-08 for the always-active predator:
+    ///   Event B — Phantom Scare: on the FIRST key pickup, a PHANTOM (a fake copy of the monster) flashes right
+    ///     in front of you + a fear spike + haptic slam + scream, held briefly, then vanishes. The REAL monster
+    ///     is NOT touched — it keeps hunting and stays audible (the old version teleported the real monster in
+    ///     and out, which felt like it spawned from nowhere and broke the by-ear tracking).
+    ///   Event C — The Reveal (mid): same phantom jolt, call TriggerReveal() from a section-entry trigger once
+    ///     real sections exist.
     /// Debug: press J to fire Event B on demand.
     /// </summary>
     public class ScareDirector : MonoBehaviour
     {
-        [Header("Event B — False Catch (architecture.md)")]
-        [SerializeField] private float _eventBDelay = 5f;
+        [Header("Phantom scare")]
         [SerializeField] private float _jumpscareHold = 0.45f;
         [SerializeField] private float _jumpscareInsanity = 0.9f;
         [SerializeField] private float _inFrontDistance = 1.2f;
@@ -32,6 +29,7 @@ namespace ProjectS
         private MonsterAI _monster;
         private InsanitySystem _insanity;
 
+        private int _keysAtStart = -1;
         private bool _eventBFired;
         private bool _scareActive;
 
@@ -44,86 +42,96 @@ namespace ProjectS
             _insanity = FindFirstObjectByType<InsanitySystem>();
         }
 
-        /// <summary>GameState calls this when the run actually begins (not during the menu).</summary>
+        /// <summary>GameState calls this when the run begins — remember the held-key count so we can fire on the
+        /// first FOUND key.</summary>
         public void OnRunStarted()
         {
-            StartCoroutine(EventBTimer());
+            _keysAtStart = GameState.Instance != null ? GameState.Instance.KeyCount : 1;
         }
 
         private void Update()
         {
             if (_debugKey && Keyboard.current != null && Keyboard.current.jKey.wasPressedThisFrame)
                 FireEventB();
+
+            // Fire on the first key pickup (a designed beat, not an arbitrary timer).
+            if (!_eventBFired && _keysAtStart >= 0 && GameState.Instance != null
+                && GameState.Instance.State == GameState.RunState.Playing
+                && GameState.Instance.KeyCount > _keysAtStart)
+                FireEventB();
         }
 
-        private IEnumerator EventBTimer()
-        {
-            yield return new WaitForSeconds(_eventBDelay);
-            FireEventB();
-        }
-
-        /// <summary>Event B — timed false catch. Fires once.</summary>
+        /// <summary>Event B — phantom false catch. Fires once.</summary>
         public void FireEventB()
         {
             if (_eventBFired || _scareActive) return;
             if (GameState.Instance != null && GameState.Instance.State != GameState.RunState.Playing) return;
             _eventBFired = true;
-            StartCoroutine(FalseCatchRoutine());
+            StartCoroutine(PhantomScareRoutine());
         }
 
         /// <summary>Event C hook — call from a section-entry trigger once real levels exist.</summary>
         public void TriggerReveal()
         {
             if (_scareActive) return;
-            StartCoroutine(FalseCatchRoutine()); // same jolt; no catch, no QTE
+            StartCoroutine(PhantomScareRoutine());
         }
 
-        private IEnumerator FalseCatchRoutine()
+        private IEnumerator PhantomScareRoutine()
         {
-            if (_monster == null || _camera == null || _player == null) yield break;
+            if (_camera == null || _player == null) yield break;
             _scareActive = true;
 
-            // Lunge: slam the monster right in front of you, facing you, frozen (QTE sees it as busy → no encounter).
+            // Phantom right in front — the REAL monster is left alone (keeps hunting + audible).
             Vector3 front = _camera.transform.position + FlatForward() * _inFrontDistance;
-            if (NavMesh.SamplePosition(front, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-                _monster.TeleportTo(hit.position);
-            _monster.SetFrozen(true);
-            _monster.FaceInstant(_player.position);
-            _monster.GetComponentInChildren<MonsterVisual>()?.PlayAttack(); // lunge animation (if the model's set up)
+            front.y = _player.position.y;
+            GameObject phantom = SpawnPhantom(front);
 
             _insanity?.Spike(_jumpscareInsanity);
-            HapticManager.Instance?.Jumpscare(); // violent slam on device (no-op in editor)
-            // TODO(audio): add the jumpscare audio sting here once AudioDirector exists (Stage 2).
+            HapticManager.Instance?.Jumpscare();
+            AudioDirector.Instance?.Jumpscare();
 
             yield return new WaitForSeconds(_jumpscareHold);
 
-            // Vanish: throw the monster far away, then hand control back to its FSM.
-            if (TryFarPoint(out Vector3 far)) _monster.TeleportTo(far);
-            _monster.SetFrozen(false);
+            if (phantom != null) Destroy(phantom);
             _scareActive = false;
+        }
+
+        // A throwaway copy of the monster's visual (or a capsule fallback), facing you, playing the lunge.
+        private GameObject SpawnPhantom(Vector3 pos)
+        {
+            GameObject phantom;
+            var visual = _monster != null ? _monster.GetComponentInChildren<MonsterVisual>() : null;
+            if (visual != null)
+            {
+                phantom = Instantiate(visual.gameObject);
+                phantom.name = "ScarePhantom";
+                phantom.transform.position = pos;
+                FaceThePlayer(phantom.transform);
+                phantom.GetComponent<MonsterVisual>()?.PlayAttack();
+            }
+            else
+            {
+                phantom = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                phantom.name = "ScarePhantom";
+                var col = phantom.GetComponent<Collider>();
+                if (col != null) Destroy(col);
+                phantom.transform.position = pos + Vector3.up * 1f;
+                FaceThePlayer(phantom.transform);
+            }
+            return phantom;
+        }
+
+        private void FaceThePlayer(Transform t)
+        {
+            Vector3 dir = _player.position - t.position; dir.y = 0f;
+            if (dir.sqrMagnitude > 1e-4f) t.rotation = Quaternion.LookRotation(dir.normalized);
         }
 
         private Vector3 FlatForward()
         {
             Vector3 fwd = _camera.transform.forward; fwd.y = 0f;
             return fwd.sqrMagnitude < 1e-4f ? transform.forward : fwd.normalized;
-        }
-
-        private bool TryFarPoint(out Vector3 result)
-        {
-            for (int i = 0; i < 12; i++)
-            {
-                float angle = Random.Range(0f, Mathf.PI * 2f);
-                Vector3 candidate = _player.position + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 12f;
-                if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, 3f, NavMesh.AllAreas) &&
-                    Vector3.Distance(hit.position, _player.position) > 8f)
-                {
-                    result = hit.position;
-                    return true;
-                }
-            }
-            result = default;
-            return false;
         }
     }
 }

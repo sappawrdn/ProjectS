@@ -31,6 +31,10 @@ namespace ProjectS
         [SerializeField] private float _joystickRadius = 140f;        // px drag for full-speed move
         [SerializeField] private float _touchLookSensitivity = 0.12f; // degrees per px dragged
 
+        [Header("Wall-bump feedback (both modes)")]
+        [SerializeField] private float _wallBumpThreshold = 0.6f;     // fraction of intended move blocked = a real bonk
+        [SerializeField] private float _wallBumpCooldown = 0.35f;     // debounce so sliding along a wall doesn't buzz
+
         [Header("Camera + FOV ladder (driven later by the catch system)")]
         [SerializeField] private Camera _camera;
         [SerializeField] private float _baseFov = 60f;
@@ -56,6 +60,7 @@ namespace ProjectS
         private bool _inputEnabled = true;
         private Vector2 _touchMove; // from the left-half joystick (0..1 magnitude)
         private Vector2 _touchLook; // this frame's right-half drag delta (px)
+        private float _bumpTimer;   // wall-bump debounce
 
         // How much control the player currently has (drops with catches): 0->1, 1->0.6, 2+->0.45.
         public float ControlFactor => _controlFactor;
@@ -171,8 +176,26 @@ namespace ProjectS
             else
                 _verticalVelocity += _gravity * Time.deltaTime;
 
+            Vector3 before = transform.position;
+            float desired = wish.magnitude * Time.deltaTime; // intended horizontal distance this frame
             Vector3 velocity = wish + Vector3.up * _verticalVelocity;
             _cc.Move(velocity * Time.deltaTime);
+
+            // Wall bump: you tried to move but a wall ate most of it → a real bonk (impact-only, debounced, so
+            // sliding along a wall doesn't buzz). Strength scales with how much was blocked.
+            if (_bumpTimer > 0f) _bumpTimer -= Time.deltaTime;
+            if (desired > 0.01f && _bumpTimer <= 0f)
+            {
+                Vector3 moved = transform.position - before; moved.y = 0f;
+                float blocked = desired - moved.magnitude;
+                if (blocked > _wallBumpThreshold * desired)
+                {
+                    float strength = Mathf.Clamp01(blocked / Mathf.Max(desired, 1e-4f));
+                    HapticManager.Instance?.WallBump(strength);
+                    AudioDirector.Instance?.WallBump(strength);
+                    _bumpTimer = _wallBumpCooldown;
+                }
+            }
         }
 
         private void UpdateFov()

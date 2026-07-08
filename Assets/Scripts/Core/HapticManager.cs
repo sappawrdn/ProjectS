@@ -163,6 +163,13 @@ namespace ProjectS
             Play(new List<CHHapticEvent> { Continuous(0f, 0.35f, 0.7f, 0.1f) }, ref _oneShotPlayer);
         }
 
+        /// <summary>Soft short thud when you walk into a wall (strength 0..1). Subtle — must not crowd the
+        /// heartbeat/danger channel; used in both the normal and eyes-off modes.</summary>
+        public void WallBump(float strength)
+        {
+            Play(new List<CHHapticEvent> { Transient(0f, Mathf.Clamp01(strength) * 0.55f, 0.3f) }, ref _oneShotPlayer);
+        }
+
         // ===================== helpers =====================
         private static CHHapticTransientEvent Transient(float time, float intensity, float sharpness) =>
             new CHHapticTransientEvent

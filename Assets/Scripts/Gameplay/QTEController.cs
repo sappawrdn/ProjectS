@@ -70,6 +70,7 @@ namespace ProjectS
             _fails = 0;
             _needle = 0f;
             RandomizeGreen();
+            AudioDirector.Instance?.MonsterAttack(); // creature attack as the encounter opens
             _player?.SetInputEnabled(false); // freeze the player during the overlay
             _monster?.SetFrozen(true);       // hold the monster while the QTE is open
         }
