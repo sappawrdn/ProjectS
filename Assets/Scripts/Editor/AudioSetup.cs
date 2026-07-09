@@ -32,6 +32,8 @@ namespace ProjectS.EditorTools
             (T2 + "key-pickup.wav",    false, AudioClipLoadType.DecompressOnLoad),
             (T2 + "wall-bump.wav",     false, AudioClipLoadType.DecompressOnLoad),
             (T2 + "player-footstep.wav", false, AudioClipLoadType.DecompressOnLoad),
+            (T2 + "QTE-hit.wav",       false, AudioClipLoadType.DecompressOnLoad),  // 2D one-shot
+            (T2 + "QTE-miss.wav",      false, AudioClipLoadType.DecompressOnLoad),  // 2D one-shot
         };
 
         [MenuItem("ProjectS/Set Up Audio")]
@@ -74,6 +76,8 @@ namespace ProjectS.EditorTools
             dir.keyPickup      = Load(T2 + "key-pickup.wav");
             dir.wallBump       = Load(T2 + "wall-bump.wav");
             dir.footstep       = Load(T2 + "player-footstep.wav");
+            dir.qteHit         = Load(T2 + "QTE-hit.wav");
+            dir.qteMiss        = Load(T2 + "QTE-miss.wav");
 
             EditorUtility.SetDirty(dir);
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(go.scene);

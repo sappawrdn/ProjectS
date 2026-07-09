@@ -117,12 +117,14 @@ namespace ProjectS
                 _sweepDir *= -1f; // reverse the sweep direction after a successful tap
                 _pulseTimer = _pulseSeconds;                                   // ring pulses on a hit
                 _flashColor = Color.white; _flashTimer = _flashSeconds * 0.4f; // faint white pop
+                AudioDirector.Instance?.QteHit();
             }
             else
             {
                 _fails++;
                 _flashColor = Color.white; _flashTimer = _flashSeconds; // harsh white flash (static/camera)
                 _shakeTimer = _shakeSeconds;                            // + screen shake
+                AudioDirector.Instance?.QteMiss();
             }
 
             _roundTime = 0f;   // fresh round → green resets to max

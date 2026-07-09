@@ -21,12 +21,16 @@ namespace ProjectS
         [SerializeField] private int _startingHeldKeys = 1;
         [SerializeField] private int _catchesToLose = 3;
 
+        [Header("Debug")]
+        [SerializeField] private bool _showDebugHud = false; // GDD: NO meter UI in the ship build — dev-only readout
+
         [Header("References (auto-found if empty)")]
         [SerializeField] private MonsterAI _monster;
         [SerializeField] private PlayerController _player;
 
         public int KeyCount { get; private set; }
         public int CatchCount { get; private set; }
+        public int KeysRequired => _keysRequired; // ExitDoor reads this for the tap-to-escape gate
         public RunState State { get; private set; } = RunState.MainMenu;
 
         /// <summary>Set by the MainMenu scene's START before loading the game so it drops straight into the run
@@ -54,12 +58,11 @@ namespace ProjectS
             var kb = Keyboard.current;
             bool tap = Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame;
             bool begin = tap || (kb != null && (kb.enterKey.wasPressedThisFrame || kb.spaceKey.wasPressedThisFrame));
-            bool restart = tap || (kb != null && kb.rKey.wasPressedThisFrame);
 
             if (State == RunState.MainMenu && begin)
                 BeginRun();
-            else if ((State == RunState.Won || State == RunState.Lost) && restart)
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // clean replay reset
+            // Won/Lost is owned by EndScreenController — it plays the end video, then returns to the main menu.
+            // NO tap-to-restart here: it would reload the scene the instant you win/lose, before the end video plays.
         }
 
         private void EnterMainMenu()
@@ -128,8 +131,6 @@ namespace ProjectS
 
         private void OnGUI()
         {
-            float w = Screen.width, h = Screen.height;
-
             if (State == RunState.MainMenu)
             {
                 CenterText("PROJECT S", 64, Color.white, -40f);
@@ -137,7 +138,9 @@ namespace ProjectS
                 return;
             }
 
-            // Playing: temporary dev readout (greybox only — near-zero HUD in the ship build).
+            // GDD: no meter UI — fear is haptic + audio + vignette; win/lose is the end video. Dev-only readout.
+            if (!_showDebugHud) return;
+
             var style = new GUIStyle(GUI.skin.label) { fontSize = 18 };
             // Respect the notch/safe area (landscape iPhone) so the text isn't clipped by the screen edge.
             float x = Screen.safeArea.x + 12f;

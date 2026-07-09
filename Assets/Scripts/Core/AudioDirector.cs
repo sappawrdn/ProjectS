@@ -41,6 +41,8 @@ namespace ProjectS
         public AudioClip keyPickup;
         public AudioClip wallBump;
         public AudioClip footstep;     // looped while moving
+        public AudioClip qteHit;       // QTE: needle landed in the green
+        public AudioClip qteMiss;      // QTE: tap missed
 
         [Header("Levels")]
         [SerializeField] private float _ambientVol = 0.5f;
@@ -166,6 +168,8 @@ namespace ProjectS
 
         /// <summary>Soft thud when the player walks into a wall.</summary>
         public void WallBump(float strength) => Play2DOneShot(wallBump, Mathf.Clamp01(strength) * 0.6f);
+        public void QteHit() => Play2DOneShot(qteHit, _oneShotVol);
+        public void QteMiss() => Play2DOneShot(qteMiss, _oneShotVol);
 
         // ---- helpers ----
         private AudioSource Make2D(AudioClip clip, float vol, bool loop, bool play)

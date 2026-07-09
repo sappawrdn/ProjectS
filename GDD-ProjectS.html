@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project S — Game Design Document</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font: 10.5pt/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #1a1a1a; max-width: 760px; margin: 0 auto; padding: 24px;
+  }
+  h1 { font-size: 22pt; margin: 0 0 2px; letter-spacing: .5px; }
+  h1 + .sub { color: #8b1a1a; font-weight: 600; font-size: 11pt; margin-bottom: 2px; }
+  .meta { color: #666; font-size: 9pt; margin-bottom: 18px; }
+  h2 {
+    font-size: 13pt; color: #8b1a1a; margin: 22px 0 6px;
+    border-bottom: 2px solid #8b1a1a; padding-bottom: 3px;
+  }
+  h3 { font-size: 10.5pt; margin: 12px 0 2px; }
+  p, li { margin: 3px 0; }
+  ul, ol { margin: 4px 0 4px 0; padding-left: 20px; }
+  strong { color: #000; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 9.5pt; }
+  th, td { border: 1px solid #ccc; padding: 4px 7px; text-align: left; vertical-align: top; }
+  th { background: #f3eaea; color: #6b1414; }
+  .box {
+    background: #faf6f6; border-left: 3px solid #8b1a1a; padding: 8px 12px;
+    margin: 8px 0; font-size: 9.7pt;
+  }
+  .pillars li { margin: 5px 0; }
+  section { page-break-inside: avoid; }
+  .loop { font-family: "SF Mono", Menlo, monospace; font-size: 9pt; background:#f5f5f5;
+          padding: 8px 10px; border-radius: 4px; line-height: 1.7; }
+  footer { margin-top: 26px; border-top: 1px solid #ddd; padding-top: 8px; color:#888; font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<h1>PROJECT S</h1>
+<div class="sub">First-person psychological horror — playable eyes-off</div>
+<div class="meta">Game Design Document · v0.1 · iPhone (landscape) · Single-player · Apple Developer Academy</div>
+
+<section>
+<h2>1. Overview</h2>
+<p><strong>Project S</strong> (working title, formerly FUGUE) is a first-person psychological horror game for
+iPhone. You wake inside a shifting backrooms-like structure with no idea of the way out. You collect
+<strong>3 keys</strong> and reach the exit while evading an AI monster that hunts you — navigating largely
+<strong>by ear</strong> (spatial audio) and <strong>by touch</strong> (haptics).</p>
+<table>
+  <tr><th>Genre</th><td>First-person psychological horror / stealth-evasion</td></tr>
+  <tr><th>Platform</th><td>iPhone, landscape, portrait-locked off (4:3 retro framing)</td></tr>
+  <tr><th>Players</th><td>Single-player</td></tr>
+  <tr><th>Session</th><td>~5–10 minutes per run</td></tr>
+  <tr><th>Headline</th><td>Accessibility — a <strong>Nightmare (eyes-off) Mode</strong> fully playable without sight, and for Deaf/HoH</td></tr>
+  <tr><th>Origin</th><td>Ported from a validated RealityKit/iOS (Swift) prototype; Unity 6 is the production engine</td></tr>
+</table>
+</section>
+
+<section>
+<h2>2. Design Pillars <span style="font-weight:400;font-size:9pt;color:#666">(locked)</span></h2>
+<ol class="pillars">
+  <li><strong>Navigate by ear.</strong> Spatial audio is a core mechanic, not flavour. No compass, no minimap. Audio beacons sit on the keys and the exit.</li>
+  <li><strong>The Apple frameworks ARE the mechanic.</strong> Core Haptics + PHASE spatial audio carry the game — proving a framework can BE the gameplay, not background support.</li>
+  <li><strong>Near-zero HUD.</strong> Fear is felt through haptics + audio + a screen-edge vignette — never on-screen meters. No fear bar.</li>
+  <li><strong>Accessibility is ground-up.</strong> The eyes-off Nightmare Mode is the headline, not a bolt-on.</li>
+  <li><strong>Evasion only.</strong> No weapons. The only "attack" is a proximity stun that buys escape, not a kill.</li>
+  <li><strong>iPhone-only.</strong> The scare design depends on the Taptic Engine + spatial audio.</li>
+</ol>
+</section>
+
+<section>
+<h2>3. Core Loop</h2>
+<div class="loop">
+Listen / feel &rarr; Move toward a key &rarr; Auto-pickup &rarr; Monster escalates<br>
+&rarr; Close encounter &rarr; QTE &nbsp;(win = breathing room · lose = +1 catch)<br>
+&rarr; Collect all 3 keys &rarr; Reach the exit &rarr; ESCAPE &nbsp;(or 3 catches = caught)
+</div>
+</section>
+
+<section>
+<h2>4. Core Mechanics</h2>
+
+<h3>4.1 The Monster — a fair predator</h3>
+<p>One persistent monster that hunts from the start but starts <em>soft</em>, ramping aggression over time and
+per key collected. It senses you two ways:</p>
+<ul>
+  <li><strong>Sight</strong> — line-of-sight only (walls block it). Gaining awareness within sight range; it keeps a wider "lose range" so it doesn't instantly forget you (hysteresis).</li>
+  <li><strong>Hearing</strong> — you are heard while <em>moving</em>; standing still is safe. Hearing draws it closer but does NOT grant a full lock-on (so escape stays possible).</li>
+</ul>
+<p>When it loses you it searches your last-known position, then patrols. Fear (insanity) widens its senses.</p>
+
+<h3>4.2 Fear / Insanity — internal only</h3>
+<p>A hidden 0–1 value that builds near the monster and while moving, and decays slowly when you're calm. It is
+never shown as a number. It drives the <strong>heartbeat BPM</strong>, the <strong>vignette breathe</strong>,
+audio/haptic intensity, and modulates the monster.</p>
+
+<h3>4.3 Close Encounter — the QTE</h3>
+<p>When the monster gets close, a needle sweeps a ring; tap when it's in the green zone. The green zone
+<strong>shrinks over time</strong> and the sweep reverses on each hit. <strong>3 hits</strong> = stun the
+monster (breathing room). <strong>3 misses</strong> = +1 catch. Black-and-white visual only.</p>
+
+<h3>4.4 Catch &amp; Escape ladder</h3>
+<p>A catch is <strong>non-fatal</strong>: the monster is shoved back + briefly stunned, your controls get heavier
+and the FOV constricts (walls closing in). <strong>3 catches = caught (game over).</strong> The breathing-room
+loop makes escape possible without out-running the monster.</p>
+
+<h3>4.5 Keys &amp; the Exit</h3>
+<p>Collect <strong>3 keys</strong> (auto-collected by proximity, with a haptic confirm). With all 3, reach the
+exit door. <strong>Normal mode:</strong> a "TAP TO ESCAPE" prompt. <strong>Eyes-off mode:</strong> just reach
+the door and hold briefly — it auto-escapes (no button-hunting).</p>
+
+<h3>4.6 Scares &amp; the shifting structure</h3>
+<p>A scripted <strong>phantom scare</strong> fires on the first key pickup — a fake copy of the monster lunges in
+your face (haptic slam + scream) while the real monster keeps hunting. At high fear the environment
+<strong>rearranges</strong> when unobserved (a phantom appears behind you, a light dies) — perception dread with
+no progress impact.</p>
+</section>
+
+<section>
+<h2>5. Accessibility — Nightmare / Eyes-Off Mode <span style="font-weight:400;font-size:9pt;color:#666">(headline)</span></h2>
+<p>A single toggle in Settings turns the run fully playable <strong>without sight</strong> — you navigate by ear
+and touch. When on and playing, the screen <strong>goes black</strong> and:</p>
+<ul>
+  <li><strong>Gyro-aim</strong> — turn the phone / your body to aim the camera (like a compass).</li>
+  <li><strong>Hold-to-walk</strong> — hold anywhere on the screen to walk forward in the facing direction.</li>
+  <li><strong>Haptic compass</strong> — crisp ticks toward the nearest key, then the exit: faster the more you face it, <strong>silent when facing away</strong> (so "wrong way" is unmistakable).</li>
+  <li><strong>Grab-ready + auto-pickup</strong> — a soft buzz near a key, then it auto-collects with a confirm thump.</li>
+  <li><strong>Danger channel</strong> — the heartbeat is boosted so threat proximity is felt harder.</li>
+</ul>
+<div class="box"><strong>Why a fair predator, not a "safe-while-looking" monster:</strong> a monster that's only safe
+while watched would REQUIRE sight — breaking the by-ear pillar and killing eyes-off play. So the monster is an
+accessible predator; the perception/attention theme lives in the environment instead.</div>
+</section>
+
+<section>
+<h2>6. Sound &amp; Haptics (the by-ear channel)</h2>
+<p>Audio carries <em>information</em>, not just mood: 2D beds for dread (ambient, heartbeat, breath), 3D
+positional sources for navigation (the monster's sound follows it; beacons on keys + exit). The monster
+crossfades calm&rarr;hunting so you can HEAR its state.</p>
+<table>
+  <tr><th>Haptic</th><th>Feel</th><th>Meaning</th></tr>
+  <tr><td>Heartbeat</td><td>deep "lub-dub"</td><td>Fear channel — rate + strength scale with insanity</td></tr>
+  <tr><td>Jumpscare</td><td>violent slam + rumble</td><td>Scares</td></tr>
+  <tr><td>Compass tick</td><td>crisp, light</td><td>Faster the more you face the objective (eyes-off)</td></tr>
+  <tr><td>Grab buzz</td><td>soft hum</td><td>You can pick up / you're at the door</td></tr>
+  <tr><td>Confirm</td><td>strong double thump</td><td>Pickup / escape landed</td></tr>
+  <tr><td>Wall bump</td><td>short thud</td><td>You walked into a wall</td></tr>
+</table>
+</section>
+
+<section>
+<h2>7. Controls</h2>
+<table>
+  <tr><th>Action</th><th>Normal mode</th><th>Nightmare (eyes-off)</th></tr>
+  <tr><td>Look</td><td>Drag on the right half of the screen</td><td>Turn the phone (gyro-aim)</td></tr>
+  <tr><td>Move</td><td>Floating joystick on the left half</td><td>Hold anywhere = walk forward</td></tr>
+  <tr><td>Pick up key</td><td>Walk into it (auto)</td><td>Walk into it (auto) + buzz</td></tr>
+  <tr><td>QTE</td><td>Tap in the green zone</td><td>Tap in the green zone (by audio cue)</td></tr>
+  <tr><td>Escape</td><td>Reach exit &rarr; "Tap to Escape"</td><td>Reach exit &rarr; hold briefly (auto)</td></tr>
+</table>
+<p style="font-size:9pt;color:#666">Editor uses WASD + mouse for iteration. VoiceOver + Larger Text + a Reduce-Flashing option are respected.</p>
+</section>
+
+<section>
+<h2>8. Game Flow</h2>
+<div class="loop">
+Launch (cold-open haptic pulse) &rarr; Onboarding video (headphones warning)<br>
+&rarr; Main Menu (Start / Settings) &rarr; Run<br>
+&rarr; Escape &rarr; "Escaped" video &nbsp;|&nbsp; Caught &rarr; "Game Over" video<br>
+&rarr; back to Main Menu
+</div>
+</section>
+
+<section>
+<h2>9. Art &amp; Audio Direction</h2>
+<ul>
+  <li><strong>Look:</strong> lo-fi <strong>PSX / VHS</strong> horror — dark, moody URP lighting, a full-screen VHS overlay, forced <strong>4:3</strong> retro framing.</li>
+  <li><strong>Setting:</strong> a hospital-flavoured backrooms (Hospital Horror asset pack + PSX walls) that reads as liminal and wrong.</li>
+  <li><strong>Audio:</strong> analog dread — low hum, breath, a felt heartbeat, and the monster's roaming sound as the primary navigation anchor.</li>
+</ul>
+</section>
+
+<section>
+<h2>10. Tech Stack</h2>
+<table>
+  <tr><th>Engine</th><td>Unity 6 (6000.4) · URP (Forward+)</td></tr>
+  <tr><th>Language</th><td>C#</td></tr>
+  <tr><th>Input</th><td>Unity Input System (touch + gyroscope)</td></tr>
+  <tr><th>Nav / Physics</th><td>NavMesh + NavMeshAgent (monster) · CharacterController (player)</td></tr>
+  <tr><th>Haptics / Audio</th><td>Apple Core Haptics + PHASE spatial audio (official Unity plugins)</td></tr>
+  <tr><th>Video</th><td>Unity VideoPlayer (menu, onboarding, VHS, endings)</td></tr>
+  <tr><th>Deploy</th><td>Xcode &rarr; TestFlight (iOS 16+)</td></tr>
+</table>
+</section>
+
+<section>
+<h2>11. Scope &amp; Roadmap</h2>
+<p><strong>MVP (built):</strong> full launch&rarr;play loop on device — menu, onboarding, one lit level, the
+predator + fear + QTE + catch ladder, 3 keys + tap/auto escape, phantom scare, VHS + 4:3, end videos, and the
+eyes-off Nightmare Mode (gyro + hold-to-walk + haptic compass + auto-pickup).</p>
+<p><strong>Next:</strong> Settings polish (volume, Reduce-Flashing), audio that plays in silent mode, PHASE
+spatial-audio upgrade, more level sections, on-device balance tuning.</p>
+<div class="box"><strong>Scope discipline:</strong> greybox before art; all balance values are tunable
+(<span style="font-family:monospace">[SerializeField]</span>); under deadline, polish loses to finishing.</div>
+</section>
+
+<footer>Project S — Game Design Document · Muhammad Saffa Wardana (Sappa) · Apple Developer Academy @ BINUS Bali</footer>
+
+</body>
+</html>

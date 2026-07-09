@@ -143,3 +143,6 @@ Thumbs.db
 /Assets/NavMeshData/CH4-Map1-NavMesh.asset.meta
 /Assets/_Project/Levels/
 /Assets/_Project/Levels.meta
+
+# renamed old iOS build folder (large, local only)
+/Builds_old/

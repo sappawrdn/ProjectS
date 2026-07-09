@@ -29,7 +29,7 @@ namespace ProjectS
         [SerializeField] private float _panicVignette = 0.75f;  // opacity at insanity 1
 
         [Header("Debug")]
-        [SerializeField] private bool _showDebug = true;
+        [SerializeField] private bool _showDebug = false; // GDD: no meter UI in the ship build — dev-only readout
 
         public float Insanity { get; private set; }
         public float HeartbeatBpm => _baseBpm + _bpmPerInsanity * Insanity;

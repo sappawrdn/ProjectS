@@ -21,6 +21,10 @@ namespace ProjectS
         [SerializeField] private VideoClip _menu;
         [SerializeField] private string _gameScene = "PlacedObjects";
 
+        /// <summary>Set by EndScreenController before returning here so a run-end drops straight to the menu loop
+        /// (the onboarding + cold-open are a first-launch-only thing, not replayed every death/escape).</summary>
+        public static bool SkipOnboarding;
+
         [Header("Invisible tap zones over the baked text (normalised in the video box, y from the TOP)")]
         [SerializeField] private Rect _startRect = new Rect(0.12f, 0.55f, 0.32f, 0.12f);
         [SerializeField] private Rect _settingsRect = new Rect(0.12f, 0.71f, 0.40f, 0.12f);
@@ -35,9 +39,17 @@ namespace ProjectS
 
         private void Start()
         {
-            HapticManager.Instance?.ColdOpenPulse(); // one deep thump in the dark
             BuildUI();
-            PlayClip(_onboarding, loop: false, onEnd: ShowMenu);
+            if (SkipOnboarding)
+            {
+                SkipOnboarding = false; // returning from a run → straight to the menu loop
+                ShowMenu();
+            }
+            else
+            {
+                HapticManager.Instance?.ColdOpenPulse(); // one deep thump in the dark (first launch only)
+                PlayClip(_onboarding, loop: false, onEnd: ShowMenu);
+            }
         }
 
         private void Update()
