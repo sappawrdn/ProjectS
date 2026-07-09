@@ -38,6 +38,7 @@ namespace ProjectS
         private CHHapticEngine _engine;
         private CHHapticPatternPlayer _beatPlayer;   // heartbeat loop
         private CHHapticPatternPlayer _oneShotPlayer; // jumpscare / confirm / pulse
+        private CHHapticPatternPlayer _cuePlayer;     // compass tick / grab buzz (eyes-off) — own slot so ticks don't clobber a scare
         private bool _supported;
         private bool _beating;
         private float _insanity;
@@ -83,11 +84,12 @@ namespace ProjectS
             {
                 _beatPlayer?.Destroy();
                 _oneShotPlayer?.Destroy();
+                _cuePlayer?.Destroy();
                 _engine?.Stop();
                 _engine?.Destroy();
             }
             catch (Exception) { /* tearing down — ignore */ }
-            _beatPlayer = _oneShotPlayer = null;
+            _beatPlayer = _oneShotPlayer = _cuePlayer = null;
             _engine = null;
         }
 
@@ -168,6 +170,20 @@ namespace ProjectS
         public void WallBump(float strength)
         {
             Play(new List<CHHapticEvent> { Transient(0f, Mathf.Clamp01(strength) * 0.55f, 0.3f) }, ref _oneShotPlayer);
+        }
+
+        /// <summary>Crisp light tick — the objective compass (Haptic-Primary): fired faster the more you face the
+        /// nearest key/exit, silent when facing away. Sharp + light so it's DISTINCT from the deep heartbeat.</summary>
+        public void CompassTick()
+        {
+            Play(new List<CHHapticEvent> { Transient(0f, 0.45f, 0.95f) }, ref _cuePlayer);
+        }
+
+        /// <summary>Soft "you can grab it" hum — right next to a key (Haptic-Primary). Rounded + low so it reads
+        /// different from the crisp compass tick; auto-pickup + Confirm follow after the dwell.</summary>
+        public void GrabBuzz()
+        {
+            Play(new List<CHHapticEvent> { Continuous(0f, 0.18f, 0.4f, 0.15f) }, ref _cuePlayer);
         }
 
         // ===================== helpers =====================

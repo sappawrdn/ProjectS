@@ -31,6 +31,12 @@ namespace ProjectS
         [SerializeField] private float _joystickRadius = 140f;        // px drag for full-speed move
         [SerializeField] private float _touchLookSensitivity = 0.12f; // degrees per px dragged
 
+        [Header("Haptic-Primary / Nightmare (eyes-off): gyro-aim + hold-to-walk")]
+        [SerializeField] private float _gyroSensitivity = 55f;  // degrees per (rad/s) of phone turn
+        [SerializeField] private float _gyroYawSign = -1f;      // FLIP if turning aims the wrong way (device-dependent, GDD)
+        [SerializeField] private bool _gyroPitch = false;       // also tilt-to-pitch? off = yaw-only (steadier)
+        [SerializeField] private float _gyroPitchSign = 1f;
+
         [Header("Wall-bump feedback (both modes)")]
         [SerializeField] private float _wallBumpThreshold = 0.6f;     // fraction of intended move blocked = a real bonk
         [SerializeField] private float _wallBumpCooldown = 0.35f;     // debounce so sliding along a wall doesn't buzz
@@ -64,6 +70,9 @@ namespace ProjectS
 
         // How much control the player currently has (drops with catches): 0->1, 1->0.6, 2+->0.45.
         public float ControlFactor => _controlFactor;
+
+        // Eyes-off mode: gyro-aim + hold-to-walk replace the on-screen controls.
+        private static bool NightmareOn => HapticPrimaryController.Instance != null && HapticPrimaryController.Instance.Enabled;
 
         /// <summary>Freeze/unfreeze look+move (QTE overlays). Re-enabling reads fresh input so nothing
         /// stale carries through — the prototype's post-QTE drift bug.</summary>
@@ -110,6 +119,8 @@ namespace ProjectS
             _moveAction.Enable();
             _lookAction.Enable();
             EnhancedTouchSupport.Enable(); // touch reading on device (harmless/idle on desktop)
+            var gyro = UnityEngine.InputSystem.Gyroscope.current; // eyes-off gyro-aim (device only)
+            if (gyro != null) UnityEngine.InputSystem.InputSystem.EnableDevice(gyro);
             if (_lockCursor) Cursor.lockState = CursorLockMode.Locked;
         }
 
@@ -141,6 +152,14 @@ namespace ProjectS
             _touchLook = Vector2.zero;
             if (!EnhancedTouchSupport.enabled) return;
 
+            if (NightmareOn)
+            {
+                // Hold-to-walk: ANY held touch = walk forward in the facing direction (a single Taptic engine can't
+                // do left/right, so you aim by turning and walk by holding). No joystick, no look-drag.
+                if (ETouch.activeTouches.Count > 0) _touchMove = new Vector2(0f, 1f);
+                return;
+            }
+
             float half = Screen.width * 0.5f;
             foreach (var t in ETouch.activeTouches)
             {
@@ -153,10 +172,30 @@ namespace ProjectS
 
         private void Look()
         {
-            Vector2 delta = _lookAction.ReadValue<Vector2>();
-            _yaw += delta.x * _lookSensitivity + _touchLook.x * _touchLookSensitivity;
-            _pitch -= delta.y * _lookSensitivity + _touchLook.y * _touchLookSensitivity;
-            _pitch = Mathf.Clamp(_pitch, _pitchMin, _pitchMax);
+            // Mouse always works (editor convenience). In Nightmare mode the phone's GYRO aims (look-drag is off —
+            // a held touch walks instead); in normal mode the right-half look-drag applies.
+            Vector2 mouse = _lookAction.ReadValue<Vector2>();
+            float yawAdd = mouse.x * _lookSensitivity;
+            float pitchAdd = -mouse.y * _lookSensitivity;
+
+            if (NightmareOn)
+            {
+                var gyro = UnityEngine.InputSystem.Gyroscope.current;
+                if (gyro != null)
+                {
+                    Vector3 av = gyro.angularVelocity.ReadValue(); // rad/s, device-local
+                    yawAdd += _gyroYawSign * av.y * _gyroSensitivity * Time.deltaTime;
+                    if (_gyroPitch) pitchAdd += _gyroPitchSign * av.x * _gyroSensitivity * Time.deltaTime;
+                }
+            }
+            else
+            {
+                yawAdd += _touchLook.x * _touchLookSensitivity;
+                pitchAdd -= _touchLook.y * _touchLookSensitivity;
+            }
+
+            _yaw += yawAdd;
+            _pitch = Mathf.Clamp(_pitch + pitchAdd, _pitchMin, _pitchMax);
 
             // Yaw turns the body; pitch tilts only the camera.
             transform.rotation = Quaternion.Euler(0f, _yaw, 0f);

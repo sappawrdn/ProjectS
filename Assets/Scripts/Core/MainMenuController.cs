@@ -30,6 +30,8 @@ namespace ProjectS
         private RenderTexture _rt;
         private Button _startBtn, _settingsBtn;
         private Action _pendingEnd;
+        private GameObject _settingsPanel;
+        private Text _nightmareLabel;
 
         private void Start()
         {
@@ -158,7 +160,73 @@ namespace ProjectS
             SceneManager.LoadScene(_gameScene);
         }
 
-        private void OnSettings() => Debug.Log("[Menu] SETTINGS tapped — options screen not built yet.");
+        private void OnSettings()
+        {
+            if (_settingsPanel == null) BuildSettingsPanel();
+            _settingsPanel.SetActive(true);
+            RefreshNightmareLabel();
+        }
+
+        private void BuildSettingsPanel()
+        {
+            var canvas = _image.canvas;
+            _settingsPanel = new GameObject("SettingsPanel");
+            _settingsPanel.transform.SetParent(canvas.transform, false);
+            var bg = _settingsPanel.AddComponent<Image>();
+            bg.color = new Color(0f, 0f, 0f, 0.92f);
+            bg.raycastTarget = true; // block taps to the menu behind
+            StretchFull(bg.rectTransform);
+
+            MakeLabel("SETTINGS", 54, new Vector2(0.5f, 0.82f), _settingsPanel.transform);
+
+            var toggle = MakeMenuButton(ToggleText(), new Vector2(0.5f, 0.55f), _settingsPanel.transform);
+            _nightmareLabel = toggle.GetComponentInChildren<Text>();
+            toggle.onClick.AddListener(() => { HapticPrimaryController.Instance?.Toggle(); RefreshNightmareLabel(); });
+
+            var back = MakeMenuButton("BACK", new Vector2(0.5f, 0.28f), _settingsPanel.transform);
+            back.onClick.AddListener(() => _settingsPanel.SetActive(false));
+        }
+
+        private static string ToggleText()
+        {
+            bool on = HapticPrimaryController.Instance != null && HapticPrimaryController.Instance.Enabled;
+            return "NIGHTMARE (EYES-OFF): " + (on ? "ON" : "OFF");
+        }
+
+        private void RefreshNightmareLabel()
+        {
+            if (_nightmareLabel != null) _nightmareLabel.text = ToggleText();
+        }
+
+        private static Text MakeLabel(string text, int size, Vector2 anchor, Transform parent)
+        {
+            var t = new GameObject("Label").AddComponent<Text>();
+            t.transform.SetParent(parent, false);
+            t.text = text; t.fontSize = size; t.alignment = TextAnchor.MiddleCenter; t.color = Color.white;
+            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            t.raycastTarget = false;
+            var r = t.rectTransform;
+            r.anchorMin = r.anchorMax = r.pivot = anchor;
+            r.sizeDelta = new Vector2(920f, 120f);
+            r.anchoredPosition = Vector2.zero;
+            return t;
+        }
+
+        private static Button MakeMenuButton(string label, Vector2 anchor, Transform parent)
+        {
+            var go = new GameObject("Button");
+            go.transform.SetParent(parent, false);
+            var img = go.AddComponent<Image>();
+            img.color = new Color(0.16f, 0.02f, 0.02f, 0.95f); // dark red
+            var r = go.GetComponent<RectTransform>();
+            r.anchorMin = r.anchorMax = r.pivot = anchor;
+            r.sizeDelta = new Vector2(780f, 100f);
+            r.anchoredPosition = Vector2.zero;
+            var btn = go.AddComponent<Button>();
+            var t = MakeLabel(label, 34, new Vector2(0.5f, 0.5f), go.transform);
+            t.rectTransform.sizeDelta = new Vector2(760f, 90f);
+            return btn;
+        }
 
         // Fit the video box to the clip's own aspect (no stretch), centred, with black bars around it.
         private void FitBox()
