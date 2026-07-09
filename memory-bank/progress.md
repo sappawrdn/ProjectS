@@ -39,8 +39,13 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-09 — Sappa — Floor & ceiling cladding + material fixes (PUSHED)
+- **Editor Tooling (Floor & Ceiling):** Added `ProjectS > Clad Level3 Floor & Ceiling (dnk_dev)` in `GreyboxRoomGenerator.cs`. It automatically tiles `P_Floor_01` and `P_Ceiling_01` across the entire 52x68 m Level 3 grid based on prefab bounds, replacing the original flat primitive planes.
+- **Material Fixes:** Identified and guided the teammate to fix the URP material issues on the new `dnk_dev` assets (`Mat_Tile01`, `Mat_Tile02`, `Mat_Walllime01_C`, `Mat_Walllime02`). Disabled `Emission`, darkened the `Base Color`, and zeroed out `Smoothness` to prevent the glossy materials from picking up bright cyan reflections from the Unity default skybox in a dark indoor scene.
+- **Workflow / Git:** Pushed the `dnk_dev` assets and the updated `GreyboxRoomGenerator.cs` to the feature branch. Clarified that scene files (`Level3_Textures.unity`) do not need to be pushed since the editor scripts deterministically generate the layout, allowing seamless, conflict-free collaboration on the same level.
+- **Next:** Replace the placeholder hospital beds with the new `P_Bed_01` asset, and potentially swap other props like doors and medicine boxes.
+
 ### 2026-07-09 — Sappa — Front-end (menu+intro), VHS+4:3, device build fixes, teammate merge
-- **Merged the teammate's branch** `feature/level3-layout-updates` (his `PlacedObjects.unity` = Level3 + his
   scattered props/lighting + editor tools `RandomizePropTool`/`RandomizeClusterTool`/`LightingTool`). His edits
   to Insanity/QTE/MonsterAI were "disable-for-playtesting" hacks — DISCARDED (kept our proper balance/QTE/monster
   fixes); took his scene/tools/art. **PlacedObjects is now THE game scene** (superset; Level3 is the backup).

@@ -762,6 +762,71 @@ namespace ProjectS.EditorTools
             Debug.Log($"[Clad3] {placed} P_Wall_01 panels tiled over walls. Facing into the wall? Set WallPanelFlip = !WallPanelFlip.");
         }
 
+        [MenuItem("ProjectS/Clad Level3 Floor & Ceiling (dnk_dev)")]
+        public static void CladLevel3FloorCeilingDnk()
+        {
+            var level = GameObject.Find("Level3") ?? GameObject.Find("PlacedObjects") ?? GameObject.FindObjectOfType<Light>()?.gameObject.scene.GetRootGameObjects()[0];
+            if (level == null) return;
+
+            float depth = Ch4WorldWidth * Ch4AspectHW; // 68
+            float width = Ch4WorldWidth; // 52
+
+            var floorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Floor_01.prefab");
+            var ceilPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Ceiling_01.prefab");
+            
+            if (floorPrefab == null || ceilPrefab == null) { Debug.LogWarning("[Clad] Floor/Ceiling prefab not found!"); return; }
+
+            // measure
+            var probe = (GameObject)PrefabUtility.InstantiatePrefab(floorPrefab);
+            probe.transform.position = Vector3.zero; probe.transform.rotation = Quaternion.identity; probe.transform.localScale = Vector3.one;
+            TryWorldBounds(probe, out Bounds fb);
+            Object.DestroyImmediate(probe);
+            
+            var cprobe = (GameObject)PrefabUtility.InstantiatePrefab(ceilPrefab);
+            cprobe.transform.position = Vector3.zero; cprobe.transform.rotation = Quaternion.identity; cprobe.transform.localScale = Vector3.one;
+            TryWorldBounds(cprobe, out Bounds cb);
+            Object.DestroyImmediate(cprobe);
+
+            var oldF = level.transform.Find("FloorCladding"); if (oldF) Object.DestroyImmediate(oldF.gameObject);
+            var oldC = level.transform.Find("CeilingCladding"); if (oldC) Object.DestroyImmediate(oldC.gameObject);
+
+            var floorGroup = new GameObject("FloorCladding"); floorGroup.transform.SetParent(level.transform);
+            Undo.RegisterCreatedObjectUndo(floorGroup, "Clad Floor");
+            var ceilGroup = new GameObject("CeilingCladding"); ceilGroup.transform.SetParent(level.transform);
+            Undo.RegisterCreatedObjectUndo(ceilGroup, "Clad Ceiling");
+            
+            float stepX = fb.size.x;
+            float stepZ = fb.size.z;
+            if (stepX < 0.1f || stepZ < 0.1f) return;
+
+            int countX = Mathf.CeilToInt(width / stepX);
+            int countZ = Mathf.CeilToInt(depth / stepZ);
+
+            int count = 0;
+            for (int x = 0; x < countX; x++)
+            {
+                for (int z = 0; z < countZ; z++)
+                {
+                    Vector3 cellCenter = new Vector3(x * stepX + stepX / 2f, 0, z * stepZ + stepZ / 2f);
+                    
+                    var f = (GameObject)PrefabUtility.InstantiatePrefab(floorPrefab, floorGroup.transform);
+                    Undo.RegisterCreatedObjectUndo(f, "Clad Floor");
+                    f.transform.position = new Vector3(cellCenter.x + (f.transform.position.x - fb.center.x), 0, cellCenter.z + (f.transform.position.z - fb.center.z));
+                    
+                    var c = (GameObject)PrefabUtility.InstantiatePrefab(ceilPrefab, ceilGroup.transform);
+                    Undo.RegisterCreatedObjectUndo(c, "Clad Ceiling");
+                    c.transform.position = new Vector3(cellCenter.x + (c.transform.position.x - cb.center.x), Ch4WallHeight, cellCenter.z + (c.transform.position.z - cb.center.z));
+                    
+                    count++;
+                }
+            }
+            Debug.Log($"[Clad] {count} floor and ceiling tiles placed.");
+            
+            // Disable the old flat planes so they don't z-fight
+            var origF = level.transform.Find("Floor"); if (origF) origF.gameObject.SetActive(false);
+            var origC = level.transform.Find("Ceiling"); if (origC) origC.gameObject.SetActive(false);
+        }
+
         private static GameObject BuildMaze()
         {
             var root = new GameObject("Maze");
