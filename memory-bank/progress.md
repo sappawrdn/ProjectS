@@ -39,6 +39,11 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-09 — Raffi & Antigravity — Door Prefab Fixes & Tool Updates (PUSHED)
+- **Asset Fixes:** Manually fixed the `P_Door_01_.prefab` missing glass panes and tweaked `Mat_Door_01_G.mat` / `ChairMat.mat` for the proper abandoned hospital aesthetic.
+- **Editor Tooling (Door Fixes):** Fixed `Replace Old Doors with dnk_dev (Level 3)` to correctly reference `P_Door_01_.prefab` instead of the empty base frame. Added experimental tools to generate glass fillers via script (though ultimately resolved via manual prefab edit for better quality).
+- **Workflow / Git:** Pushed material tweaks, editor tool updates, and the corrected door prefab.
+
 ### 2026-07-09 — Antigravity — GDD Rewrite & Chair/Tray Prop Replacements (PUSHED)
 - **Game Design Document:** Completely rewrote `game-design-document.md` to formally integrate the PSX Abandoned Hospital theme as the core visual identity, replacing the old "abstract structure" concept while keeping audio-haptic mechanics intact. Added `gdd-changelog.md` to document the shifts.
 - **Editor Tooling (Chair & Tray Replacement):** Added `Replace Old Chairs with New Chair` and `Replace Old Trays with P_Med_Box_01` tools in `RandomizeClusterTool.cs`. The chair tool automatically generates a URP Material, assigns albedo/metallic/normal textures, fixes the `.dae` X-axis rotation offset, and swaps out all old `HospitalChair` instances.

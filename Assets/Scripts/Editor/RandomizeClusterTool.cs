@@ -270,8 +270,8 @@ namespace ProjectS.EditorTools
             var level = GameObject.Find("Level3") ?? GameObject.Find("PlacedObjects") ?? GameObject.FindObjectOfType<Light>()?.gameObject.scene.GetRootGameObjects()[0];
             if (level == null) return;
 
-            var doorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Door_01_Base.prefab");
-            if (doorPrefab == null) { Debug.LogWarning("P_Door_01_Base prefab tidak ditemukan!"); return; }
+            var doorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Door_01_.prefab");
+            if (doorPrefab == null) { Debug.LogWarning("P_Door_01_ prefab tidak ditemukan!"); return; }
 
             int count = 0;
             Transform doorsRoot = level.transform.Find("Doors");
@@ -313,6 +313,57 @@ namespace ProjectS.EditorTools
             newDoor.transform.rotation = oldDoor.rotation;
             
             Undo.DestroyObjectImmediate(oldDoor.gameObject);
+        }
+
+        [MenuItem("ProjectS/Props/Fix dnk_dev Door Holes (Add Glass Filler)")]
+        public static void FixDoorHoles()
+        {
+            var doors = Object.FindObjectsByType<Transform>(FindObjectsSortMode.None);
+            int count = 0;
+            
+            // Pakai material kaca bawaan pintu dnk_dev
+            string matPath = "Assets/Dnk_Dev/HospitalHorrorPack/Models/Materials/Mat_Door_01_G.mat";
+            Material glassMat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (glassMat == null) { Debug.LogWarning("Material kaca gak ketemu!"); return; }
+
+            foreach (var t in doors)
+            {
+                if (t.name.Contains("P_Door_01_") && !t.name.Contains("Glass"))
+                {
+                    // Pastikan t adalah root dari pintunya
+                    if (t.parent != null && t.parent.name.Contains("P_Door_01_")) continue;
+                    
+                    // Kalau ada blocker hitam sisa percobaan tadi, hapus
+                    Transform oldBlocker = t.Find("BlackBlocker");
+                    if (oldBlocker != null) Undo.DestroyObjectImmediate(oldBlocker.gameObject);
+                    
+                    if (t.Find("GlassFiller") != null) continue; // udah ada kaca buatan
+                    
+                    // Bikin kaca buatan dari Cube super tipis
+                    GameObject glass = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    glass.name = "GlassFiller";
+                    Undo.RegisterCreatedObjectUndo(glass, "Add Glass");
+                    
+                    // Hilangkan collider
+                    Undo.DestroyObjectImmediate(glass.GetComponent<Collider>());
+                    
+                    glass.GetComponent<MeshRenderer>().sharedMaterial = glassMat;
+                    
+                    // Parent ke door
+                    glass.transform.SetParent(t);
+                    glass.transform.localRotation = Quaternion.identity;
+                    
+                    // Posisikan khusus di area jendela atas (Y = 1.45, Z = 0 pas di tengah kusen)
+                    // Z harus 0 (atau mendekati 0) dan ketebalan harus tipis biar bingkai kayunya tetap menonjol!
+                    glass.transform.localPosition = new Vector3(0f, 1.45f, 0f); 
+                    
+                    // Scale: Lebar = 0.75, Tinggi = 0.9, Ketebalan = 0.01 (sangat tipis)
+                    glass.transform.localScale = new Vector3(0.75f, 0.9f, 0.01f);
+                    
+                    count++;
+                }
+            }
+            Debug.Log($"Berhasil generate kaca tambahan di {count} pintu!");
         }
 
         [MenuItem("ProjectS/Props/Dress Exit Door (dnk_dev + Neon)")]
