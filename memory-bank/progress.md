@@ -39,6 +39,11 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-09 — Raffi & Antigravity — Scene Assembly & Material Extraction (PUSHED)
+- **Asset Tweaks:** Extracted embedded material from `lalve2.fbx` (`Material.001.mat`) so it can be freely edited to fit the horror lighting.
+- **Level Design:** Addressed editor usability issues. Clarified how to toggle Scene Lighting to see clearly while editing a dark map, explained how to use the Move Tool (W) instead of Rect Tool to avoid stretching primitive wall textures, and established best practices for eliminating wall gaps (Vertex Snapping & Mesh Overlapping).
+- **Procedural Generation:** Clarified that the `WallCladding` automatically handles corners if the base walls are overlapped correctly, and confirmed that the generated `FloorCladding` is sufficient as the actual floor (the original greybox floor is intentionally disabled to prevent clipping). Removed the obsolete `AutoTiler.cs` and `GlassFiller` tools.
+
 ### 2026-07-09 — Raffi & Antigravity — Door Prefab Fixes & Tool Updates (PUSHED)
 - **Asset Fixes:** Manually fixed the `P_Door_01_.prefab` missing glass panes and tweaked `Mat_Door_01_G.mat` / `ChairMat.mat` for the proper abandoned hospital aesthetic.
 - **Editor Tooling (Door Fixes):** Fixed `Replace Old Doors with dnk_dev (Level 3)` to correctly reference `P_Door_01_.prefab` instead of the empty base frame. Added experimental tools to generate glass fillers via script (though ultimately resolved via manual prefab edit for better quality).
