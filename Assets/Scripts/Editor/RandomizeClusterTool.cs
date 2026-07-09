@@ -167,6 +167,103 @@ namespace ProjectS.EditorTools
             Debug.Log($"Berhasil me-replace {count} bola kuning dengan lalve2!");
         }
 
+        [MenuItem("ProjectS/Props/Replace Old Chairs with New Chair")]
+        public static void ReplaceOldChairs()
+        {
+            string dir = "Assets/hospital-chair/source/model/";
+            
+            // 1. Setup Material URP biar ga warna pink (Magenta)
+            string matPath = dir + "ChairMat.mat";
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat == null)
+            {
+                mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                mat.SetTexture("_BaseMap", AssetDatabase.LoadAssetAtPath<Texture>(dir + "textures/lambert1_albedo.jpg"));
+                mat.SetTexture("_MetallicGlossMap", AssetDatabase.LoadAssetAtPath<Texture>(dir + "textures/lambert1_metallic.jpg"));
+                mat.SetTexture("_BumpMap", AssetDatabase.LoadAssetAtPath<Texture>(dir + "textures/lambert1_normal.jpg"));
+                mat.SetFloat("_Smoothness", 0.3f);
+                AssetDatabase.CreateAsset(mat, matPath);
+                
+                // Pastikan normal map di-import sebagai Normal Map
+                var importer = AssetImporter.GetAtPath(dir + "textures/lambert1_normal.jpg") as TextureImporter;
+                if (importer != null && importer.textureType != TextureImporterType.NormalMap)
+                {
+                    importer.textureType = TextureImporterType.NormalMap;
+                    importer.SaveAndReimport();
+                }
+            }
+
+            // 2. Bikin Prefab yang udah dikasih material
+            string prefabPath = dir + "Chair_Ready.prefab";
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                GameObject dae = AssetDatabase.LoadAssetAtPath<GameObject>(dir + "model.dae");
+                if (dae == null) { Debug.LogWarning("model.dae gak ketemu!"); return; }
+                
+                GameObject inst = (GameObject)PrefabUtility.InstantiatePrefab(dae);
+                Renderer[] rs = inst.GetComponentsInChildren<Renderer>();
+                foreach (var r in rs) r.sharedMaterial = mat;
+                prefab = PrefabUtility.SaveAsPrefabAsset(inst, prefabPath);
+                Object.DestroyImmediate(inst);
+            }
+
+            // 3. Replace semua kursi di level
+            var level = GameObject.Find("Level3") ?? GameObject.Find("PlacedObjects") ?? GameObject.FindObjectOfType<Light>()?.gameObject.scene.GetRootGameObjects()[0];
+            if (level == null) return;
+            
+            int count = 0;
+            Transform[] all = level.GetComponentsInChildren<Transform>(true);
+            foreach (var t in all)
+            {
+                if (t != null && t.name.Contains("HospitalChair"))
+                {
+                    GameObject newObj = (GameObject)PrefabUtility.InstantiatePrefab(prefab, t.parent);
+                    Undo.RegisterCreatedObjectUndo(newObj, "Replace Chair");
+                    newObj.transform.position = t.position;
+                    
+                    // DAe biasanya tiduran (X=-90), jadi kita sesuaikan
+                    newObj.transform.rotation = t.rotation;
+                    newObj.transform.Rotate(-90f, 180f, 0, Space.Self); 
+                    
+                    Undo.DestroyObjectImmediate(t.gameObject);
+                    count++;
+                }
+            }
+            Debug.Log($"Berhasil me-replace {count} kursi lama dengan Chair_Ready!");
+        }
+
+        [MenuItem("ProjectS/Props/Replace Old Trays with P_Med_Box_01")]
+        public static void ReplaceOldTrays()
+        {
+            var level = GameObject.Find("Level3") ?? GameObject.Find("PlacedObjects") ?? GameObject.FindObjectOfType<Light>()?.gameObject.scene.GetRootGameObjects()[0];
+            if (level == null) return;
+
+            var trayPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Med_box_01.prefab");
+            if (trayPrefab == null) { Debug.LogWarning("P_Med_box_01 prefab tidak ditemukan!"); return; }
+
+            int count = 0;
+            Transform[] all = level.GetComponentsInChildren<Transform>(true);
+            foreach (var t in all)
+            {
+                if (t != null && t.name.Contains("HospitalTray"))
+                {
+                    Vector3 pos = t.position;
+                    Quaternion rot = t.rotation;
+                    Transform parent = t.parent;
+
+                    GameObject newTray = (GameObject)PrefabUtility.InstantiatePrefab(trayPrefab, parent);
+                    Undo.RegisterCreatedObjectUndo(newTray, "Replace Tray");
+                    newTray.transform.position = pos;
+                    newTray.transform.rotation = rot;
+                    
+                    Undo.DestroyObjectImmediate(t.gameObject);
+                    count++;
+                }
+            }
+            Debug.Log($"Berhasil me-replace {count} tray lama dengan P_Med_box_01!");
+        }
+
         [MenuItem("ProjectS/Props/Replace Old Doors with dnk_dev (Level 3)")]
         public static void ReplaceOldDoors()
         {

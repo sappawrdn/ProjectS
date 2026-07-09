@@ -39,6 +39,11 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-09 — Antigravity — GDD Rewrite & Chair/Tray Prop Replacements (PUSHED)
+- **Game Design Document:** Completely rewrote `game-design-document.md` to formally integrate the PSX Abandoned Hospital theme as the core visual identity, replacing the old "abstract structure" concept while keeping audio-haptic mechanics intact. Added `gdd-changelog.md` to document the shifts.
+- **Editor Tooling (Chair & Tray Replacement):** Added `Replace Old Chairs with New Chair` and `Replace Old Trays with P_Med_Box_01` tools in `RandomizeClusterTool.cs`. The chair tool automatically generates a URP Material, assigns albedo/metallic/normal textures, fixes the `.dae` X-axis rotation offset, and swaps out all old `HospitalChair` instances.
+- **Workflow / Git:** Pushed the new hospital chair asset, GDD updates, and editor tools.
+
 ### 2026-07-09 — Sappa — Prop replacement automation tools (PUSHED)
 - **Editor Tooling (Bed Replacement):** Added `ProjectS > Props > Replace Old Beds with P_BedBedding` to automatically swap legacy bed props inside `Scattered_Cluster` with the new `P_BedBedding` asset from `dnk_dev`. Applied a 180-degree rotation offset to ensure the new beds match the old beds' alignment perfectly.
 - **Editor Tooling (Key Replacement):** Added `ProjectS > Props > Replace Keys with lalve2` to swap the yellow primitive sphere keys with the new `lalve2.fbx` asset. The script safely removes the mesh while maintaining the `ProjectS.Key` component functionality.
