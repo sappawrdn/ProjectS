@@ -675,6 +675,93 @@ namespace ProjectS.EditorTools
                       "Set WallPanelFlip = true. Check from INSIDE a corridor.");
         }
 
+        [MenuItem("ProjectS/Clad Level3 Walls (P_Wall_01)")]
+        public static void CladLevel3WallsDnk()
+        {
+            var level = GameObject.Find("Level3");
+            if (level == null)
+            {
+                // Fallback kalau lagi di scene yang namanya bukan Level3 tapi ada root GameObject "Level3"
+                level = GameObject.Find("PlacedObjects") ?? GameObject.FindObjectOfType<Light>()?.gameObject.scene.GetRootGameObjects()[0];
+                if (level == null || level.transform.Find("Walls") == null)
+                {
+                    Debug.LogWarning("[Clad3] Harus ada obyek utama yang punya child 'Walls' di scene ini.");
+                    return;
+                }
+            }
+
+            var panel = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Wall_01.prefab");
+            if (panel == null) { Debug.LogWarning("[Clad3] P_Wall_01.prefab not found!"); return; }
+
+            // Measure the panel once (native, unrotated) → axis roles + native size for the tiling maths.
+            var probe = (GameObject)PrefabUtility.InstantiatePrefab(panel);
+            probe.transform.rotation = Quaternion.identity;
+            probe.transform.localScale = Vector3.one;
+            probe.transform.position = Vector3.zero;
+            bool measured = TryWorldBounds(probe, out Bounds pb);
+            Vector3 sz = measured ? pb.size : Vector3.one;
+            Object.DestroyImmediate(probe);
+            if (!measured) return;
+
+            int tall = LargestAxis(sz), thin = SmallestAxis(sz), mid = 3 - tall - thin;
+            if (tall == thin) return;
+            Quaternion srcRot = Quaternion.LookRotation(AxisVec(thin), AxisVec(tall));
+
+            var old = level.transform.Find("WallCladding");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            var clad = new GameObject("WallCladding");
+            Undo.RegisterCreatedObjectUndo(clad, "Clad Level3 Walls Dnk");
+            clad.transform.SetParent(level.transform);
+
+            int placed = 0;
+            foreach (var w in Ch4CollectWalls(level))
+            {
+                int count = Mathf.Max(1, Mathf.RoundToInt(w.length / Mathf.Max(0.1f, sz[mid]))); // panels along this wall
+                Vector3 localScale = Vector3.one;
+                localScale[tall] = Ch4WallHeight / Mathf.Max(1e-4f, sz[tall]);       // height → wall height
+                localScale[mid] = w.length / (count * Mathf.Max(1e-4f, sz[mid]));    // width → fill the span evenly
+
+                Vector3 normal = w.vertical ? Vector3.right : Vector3.forward;
+                Vector3 along = w.vertical ? Vector3.forward : Vector3.right;
+                foreach (var face in new[] { normal, -normal }) // clad BOTH faces (walls are seen from either side)
+                {
+                    Vector3 facing = WallPanelFlip ? -face : face;
+                    Quaternion rot = Quaternion.LookRotation(facing, Vector3.up) * Quaternion.Inverse(srcRot);
+                    for (int i = 0; i < count; i++)
+                    {
+                        float t = ((i + 0.5f) / count - 0.5f) * w.length;
+                        var inst = (GameObject)PrefabUtility.InstantiatePrefab(panel, clad.transform);
+                        Undo.RegisterCreatedObjectUndo(inst, "Clad Level3 Walls Dnk");
+                        
+                        // Set scale and rotation first so bounds are measured correctly
+                        inst.transform.localScale = localScale;
+                        inst.transform.rotation = rot;
+                        
+                        // We want the geometric CENTER of the panel to be exactly at targetCenter.
+                        // targetCenter is along the wall segment, pushed out by half wall thickness.
+                        Vector3 targetCenter = w.pos + face * (Ch4WallThick / 2f + 0.02f) + along * t;
+                        
+                        // Place at target temporarily to measure bounds relative to it
+                        inst.transform.position = targetCenter;
+                        
+                        if (TryWorldBounds(inst, out Bounds b))
+                        {
+                            // Shift the prefab so its bounds center sits exactly at targetCenter
+                            Vector3 pivotOffset = inst.transform.position - b.center;
+                            Vector3 finalPos = targetCenter + pivotOffset;
+                            
+                            // Align the bottom of the geometry to Y = 0 (the floor)
+                            finalPos.y -= (b.min.y - inst.transform.position.y);
+                            
+                            inst.transform.position = finalPos;
+                        }
+                        placed++;
+                    }
+                }
+            }
+            Debug.Log($"[Clad3] {placed} P_Wall_01 panels tiled over walls. Facing into the wall? Set WallPanelFlip = !WallPanelFlip.");
+        }
+
         private static GameObject BuildMaze()
         {
             var root = new GameObject("Maze");
