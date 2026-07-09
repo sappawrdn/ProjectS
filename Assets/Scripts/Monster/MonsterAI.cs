@@ -135,6 +135,13 @@ namespace ProjectS
 
         private void Awake()
         {
+            // --- TEMPORARILY DISABLED FOR SCENE TESTING ---
+            // Teman Sappa: Kalo mau nge-merge dan butuh monsternya aktif lagi, 
+            // hapus baris gameObject.SetActive(false) di bawah ini ya! 
+            gameObject.SetActive(false);
+            return;
+            // ----------------------------------------------
+
             _agent = GetComponent<NavMeshAgent>();
             if (_player == null)
             {

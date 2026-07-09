@@ -35,6 +35,13 @@ namespace ProjectS
 
         private void Start()
         {
+            // --- TEMPORARILY DISABLED FOR SCENE TESTING ---
+            // Teman Sappa: Kalo mau nge-merge dan butuh Jumpscare Phantom aktif lagi,
+            // hapus baris gameObject.SetActive(false) di bawah ini ya!
+            gameObject.SetActive(false);
+            return;
+            // ----------------------------------------------
+
             var p = GameObject.FindGameObjectWithTag("Player");
             if (p != null) _player = p.transform;
             _camera = Camera.main;
