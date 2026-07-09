@@ -39,6 +39,12 @@
 ## Session log
 <!-- Newest on top. Format: ### YYYY-MM-DD — Name / what changed / what's next -->
 
+### 2026-07-09 — Sappa — Prop replacement automation tools (PUSHED)
+- **Editor Tooling (Bed Replacement):** Added `ProjectS > Props > Replace Old Beds with P_BedBedding` to automatically swap legacy bed props inside `Scattered_Cluster` with the new `P_BedBedding` asset from `dnk_dev`. Applied a 180-degree rotation offset to ensure the new beds match the old beds' alignment perfectly.
+- **Editor Tooling (Key Replacement):** Added `ProjectS > Props > Replace Keys with lalve2` to swap the yellow primitive sphere keys with the new `lalve2.fbx` asset. The script safely removes the mesh while maintaining the `ProjectS.Key` component functionality.
+- **Editor Tooling (Exit Door Dressing):** Added `ProjectS > Props > Dress Exit Door (dnk_dev + Neon)`. This script replaces the old green primitive cube "Exit" with the `P_Door_01_.prefab` (dnk_dev) and adds a glowing red `ExitSign.fbx` on top. The original `BoxCollider` is preserved to act as the win-state trigger zone.
+- **Workflow / Git:** Pushed the `RandomizeClusterTool.cs` updates and the newly added `lalve2.fbx` to the feature branch. Scene files do not need to be committed since these operations are automated through the tools.
+
 ### 2026-07-09 — Sappa — Floor & ceiling cladding + material fixes (PUSHED)
 - **Editor Tooling (Floor & Ceiling):** Added `ProjectS > Clad Level3 Floor & Ceiling (dnk_dev)` in `GreyboxRoomGenerator.cs`. It automatically tiles `P_Floor_01` and `P_Ceiling_01` across the entire 52x68 m Level 3 grid based on prefab bounds, replacing the original flat primitive planes.
 - **Material Fixes:** Identified and guided the teammate to fix the URP material issues on the new `dnk_dev` assets (`Mat_Tile01`, `Mat_Tile02`, `Mat_Walllime01_C`, `Mat_Walllime02`). Disabled `Emission`, darkened the `Base Color`, and zeroed out `Smoothness` to prevent the glossy materials from picking up bright cyan reflections from the Unity default skybox in a dark indoor scene.

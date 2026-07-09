@@ -101,5 +101,186 @@ namespace ProjectS.EditorTools
 
             Debug.Log($"Berhasil menyebar {placed} paket cluster secara acak! Objek asli disembunyikan.");
         }
+
+        [MenuItem("ProjectS/Props/Replace Old Beds with P_BedBedding")]
+        public static void ReplaceOldBeds()
+        {
+            var level = GameObject.Find("Level3") ?? GameObject.Find("PlacedObjects") ?? GameObject.FindObjectOfType<Light>()?.gameObject.scene.GetRootGameObjects()[0];
+            if (level == null) return;
+
+            var bedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_BedBedding.prefab");
+            if (bedPrefab == null) { Debug.LogWarning("P_BedBedding prefab tidak ditemukan!"); return; }
+
+            int count = 0;
+            Transform[] allTransforms = level.GetComponentsInChildren<Transform>(true);
+            foreach (Transform t in allTransforms)
+            {
+                if (t == null) continue;
+                if (t.name.Contains("HospitalBed") || t.name == "Bed")
+                {
+                    Vector3 pos = t.position;
+                    Quaternion rot = t.rotation;
+                    Transform parent = t.parent;
+
+                    GameObject newBed = (GameObject)PrefabUtility.InstantiatePrefab(bedPrefab, parent);
+                    Undo.RegisterCreatedObjectUndo(newBed, "Replace Bed");
+                    newBed.transform.position = pos;
+                    
+                    // Putar -90 derajat untuk menyesuaikan orientasi bed baru (biasanya sumbu Y)
+                    newBed.transform.rotation = rot;
+                    newBed.transform.Rotate(0, -90f, 0, Space.Self);
+                    
+                    Undo.DestroyObjectImmediate(t.gameObject);
+                    count++;
+                }
+            }
+            Debug.Log($"Berhasil me-replace {count} kasur lama dengan P_BedBedding!");
+        }
+
+        [MenuItem("ProjectS/Props/Replace Keys with lalve2")]
+        public static void ReplaceKeysWithLalve2()
+        {
+            var valvePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Keys/lalve2.fbx");
+            if (valvePrefab == null) { Debug.LogWarning("lalve2.fbx tidak ditemukan di Assets/Keys!"); return; }
+
+            int count = 0;
+            ProjectS.Key[] keys = Object.FindObjectsByType<ProjectS.Key>(FindObjectsSortMode.None);
+            foreach (var key in keys)
+            {
+                // Hapus visual bola kuning (Sphere) lama biar gak numpuk
+                var meshFilter = key.GetComponent<MeshFilter>();
+                var meshRenderer = key.GetComponent<MeshRenderer>();
+                if (meshFilter) Undo.DestroyObjectImmediate(meshFilter);
+                if (meshRenderer) Undo.DestroyObjectImmediate(meshRenderer);
+
+                // Pasang aset lalve2 ke dalam objek kunci
+                if (key.transform.Find(valvePrefab.name) == null)
+                {
+                    GameObject valve = (GameObject)PrefabUtility.InstantiatePrefab(valvePrefab, key.transform);
+                    Undo.RegisterCreatedObjectUndo(valve, "Replace Key");
+                    valve.name = valvePrefab.name;
+                    valve.transform.localPosition = Vector3.zero;
+                    valve.transform.localRotation = Quaternion.identity;
+                    count++;
+                }
+            }
+            Debug.Log($"Berhasil me-replace {count} bola kuning dengan lalve2!");
+        }
+
+        [MenuItem("ProjectS/Props/Replace Old Doors with dnk_dev (Level 3)")]
+        public static void ReplaceOldDoors()
+        {
+            var level = GameObject.Find("Level3") ?? GameObject.Find("PlacedObjects") ?? GameObject.FindObjectOfType<Light>()?.gameObject.scene.GetRootGameObjects()[0];
+            if (level == null) return;
+
+            var doorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Door_01_Base.prefab");
+            if (doorPrefab == null) { Debug.LogWarning("P_Door_01_Base prefab tidak ditemukan!"); return; }
+
+            int count = 0;
+            Transform doorsRoot = level.transform.Find("Doors");
+            if (doorsRoot == null)
+            {
+                Transform[] all = level.GetComponentsInChildren<Transform>(true);
+                foreach (var t in all)
+                {
+                    if (t != null && t.name.Contains("DoorType"))
+                    {
+                        ReplaceDoor(t, doorPrefab);
+                        count++;
+                    }
+                }
+            }
+            else
+            {
+                Transform[] children = new Transform[doorsRoot.childCount];
+                for (int i = 0; i < doorsRoot.childCount; i++) children[i] = doorsRoot.GetChild(i);
+                foreach (var t in children)
+                {
+                    ReplaceDoor(t, doorPrefab);
+                    count++;
+                }
+            }
+            Debug.Log($"Berhasil me-replace {count} pintu lama dengan dnk_dev door!");
+        }
+
+        private static void ReplaceDoor(Transform oldDoor, GameObject newPrefab)
+        {
+            GameObject newDoor = (GameObject)PrefabUtility.InstantiatePrefab(newPrefab, oldDoor.parent);
+            Undo.RegisterCreatedObjectUndo(newDoor, "Replace Door");
+            newDoor.transform.position = oldDoor.position;
+            
+            // Pintu lama (DoorType1) mungkin punya scale 1.3f (dari DoorScale), kita kembalikan ke 1
+            newDoor.transform.localScale = Vector3.one; 
+            
+            // Samakan rotasi
+            newDoor.transform.rotation = oldDoor.rotation;
+            
+            Undo.DestroyObjectImmediate(oldDoor.gameObject);
+        }
+
+        [MenuItem("ProjectS/Props/Dress Exit Door (dnk_dev + Neon)")]
+        public static void DressExitDoor()
+        {
+            GameObject exitObj = GameObject.Find("Exit");
+            if (exitObj == null) { Debug.LogWarning("Objek 'Exit' tidak ditemukan di scene!"); return; }
+
+            var doorPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Dnk_Dev/HospitalHorrorPack/Prefab/P_Door_01_.prefab");
+            var signPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/PSXBackrooms/Models/ExitSign.fbx");
+            
+            if (doorPrefab == null || signPrefab == null) { Debug.LogWarning("Prefab pintu atau neon tidak ditemukan!"); return; }
+
+            // Hapus visual kubus hijau lama (tapi biarkan BoxCollider-nya sebagai trigger)
+            var meshFilter = exitObj.GetComponent<MeshFilter>();
+            var meshRenderer = exitObj.GetComponent<MeshRenderer>();
+            if (meshFilter) Undo.DestroyObjectImmediate(meshFilter);
+            if (meshRenderer) Undo.DestroyObjectImmediate(meshRenderer);
+            
+            // Tambahkan pintu
+            if (exitObj.transform.Find(doorPrefab.name) == null)
+            {
+                GameObject newDoor = (GameObject)PrefabUtility.InstantiatePrefab(doorPrefab, exitObj.transform);
+                Undo.RegisterCreatedObjectUndo(newDoor, "Dress Exit");
+                newDoor.name = doorPrefab.name;
+                
+                // Pastikan pintu napak di lantai (y = 0)
+                newDoor.transform.position = new Vector3(exitObj.transform.position.x, 0, exitObj.transform.position.z);
+                newDoor.transform.localRotation = Quaternion.identity;
+                
+                // Putar 90 derajat biar sejajar tembok exit-nya
+                newDoor.transform.Rotate(0, 90f, 0, Space.Self);
+            }
+
+            // Tambahkan Neon Sign di atas pintu
+            if (exitObj.transform.Find("ExitNeon") == null)
+            {
+                GameObject neon = (GameObject)PrefabUtility.InstantiatePrefab(signPrefab, exitObj.transform);
+                Undo.RegisterCreatedObjectUndo(neon, "Dress Exit Neon");
+                neon.name = "ExitNeon";
+                
+                // Letakkan di atas pintu (tinggi 2.3 meter)
+                neon.transform.position = new Vector3(exitObj.transform.position.x, 2.3f, exitObj.transform.position.z);
+                neon.transform.localRotation = Quaternion.identity;
+                neon.transform.Rotate(0, -90f, 0, Space.Self);
+                neon.transform.localScale = Vector3.one * 1.5f;
+                
+                // Set material neon biar nyala (pakai ExitSignRedTex)
+                var neonRenderer = neon.GetComponentInChildren<MeshRenderer>();
+                if (neonRenderer)
+                {
+                    Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                    var tex = AssetDatabase.LoadAssetAtPath<Texture>("Assets/PSXBackrooms/Textures/ExitSignRedTex.png");
+                    if (tex)
+                    {
+                        mat.mainTexture = tex;
+                        mat.SetTexture("_EmissionMap", tex);
+                        mat.SetColor("_EmissionColor", Color.white * 2.5f);
+                        mat.EnableKeyword("_EMISSION");
+                    }
+                    neonRenderer.sharedMaterial = mat;
+                }
+            }
+            
+            Debug.Log("Pintu Exit berhasil didandani jadi super horor (Pintu dnk_dev + Lampu Neon Merah)!");
+        }
     }
 }
